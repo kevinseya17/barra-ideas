@@ -76,18 +76,18 @@ export default function Operacion({
     const pers = perdidas.filter(per => per.producto_id === p.id).reduce((sum, per) => sum + Number(per.cantidad), 0);
     const descs = descuentos.filter(d => d.producto_id === p.id).reduce((sum, d) => sum + (d.valor_descontado || 0), 0);
 
-    const bruto = (ini + recs - cors - pers) * (p.precio_venta || 0);
+    const bruto = (ini + recs - cors - pers) * (p.precio || 0);
     return acc + bruto - descs;
   }, 0);
 
   const totalGastos = gastos.reduce((a, b) => a + Number(b.monto), 0);
   const totalRecargas = recargas.reduce((a, b) => {
     const p = productos.find(x => x.id === b.producto_id);
-    return a + (Number(b.cantidad) * (p?.precio_venta || 0));
+    return a + (Number(b.cantidad) * (p?.precio || 0));
   }, 0);
   const totalCortesias = cortesias.reduce((a, b) => {
     const p = productos.find(x => x.id === b.producto_id);
-    return a + (Number(b.cantidad) * (p?.precio_venta || 0));
+    return a + (Number(b.cantidad) * (p?.precio || 0));
   }, 0);
   const totalPerdidas = perdidas.reduce((a, b) => a + Number(b.cantidad), 0);
 
