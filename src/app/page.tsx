@@ -116,8 +116,9 @@ export default function BarraProApp() {
   const handleAddRecarga = async (r: any) => {
     if (!state.evento) return;
     const time = nowTime();
-    const localRec = { ...r, id: uid(), evento_id: state.evento.id, hora: time };
-    const logEntry: LogEntry = { id: uid(), time, msg: `➕ Recarga: ${r.cantidad} unidades de ${pName(r.producto_id)} (Proveedor: ${r.proveedor || 'Sin especificar'})`, tipo: 'recarga', metadata: { ...r, hora: time } };
+    const id = uid();
+    const localRec = { ...r, id, evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `➕ Recarga: ${r.cantidad} unidades de ${pName(r.producto_id)} (Proveedor: ${r.proveedor || 'Sin especificar'})`, tipo: 'recarga', metadata: { ...localRec } };
     
     setState(s => ({ 
       ...s, 
@@ -131,8 +132,9 @@ export default function BarraProApp() {
   const handleAddCortesia = async (c: any) => {
     if (!state.evento) return;
     const time = nowTime();
-    const localCor = { ...c, id: uid(), evento_id: state.evento.id, hora: time };
-    const logEntry: LogEntry = { id: uid(), time, msg: `🎁 Cortesía: ${c.cantidad} de ${pName(c.producto_id)} para ${c.persona}`, tipo: 'cortesia', metadata: { ...c, hora: time } };
+    const id = uid();
+    const localCor = { ...c, id, evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `🎁 Cortesía: ${c.cantidad} de ${pName(c.producto_id)} para ${c.persona}`, tipo: 'cortesia', metadata: { ...localCor } };
     
     setState(s => ({ 
       ...s, 
@@ -146,8 +148,9 @@ export default function BarraProApp() {
   const handleAddPerdida = async (p: any) => {
     if (!state.evento) return;
     const time = nowTime();
-    const localPer = { ...p, id: uid(), evento_id: state.evento.id, hora: time };
-    const logEntry: LogEntry = { id: uid(), time, msg: `⚠️ Pérdida: ${p.cantidad} de ${pName(p.producto_id)} - ${p.motivo}`, tipo: 'perdida', metadata: { ...p, hora: time } };
+    const id = uid();
+    const localPer = { ...p, id, evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `⚠️ Pérdida: ${p.cantidad} de ${pName(p.producto_id)} - ${p.motivo}`, tipo: 'perdida', metadata: { ...localPer } };
     
     setState(s => ({ 
       ...s, 
@@ -161,8 +164,9 @@ export default function BarraProApp() {
   const handleAddDescuento = async (d: any) => {
     if (!state.evento) return;
     const time = nowTime();
-    const localDesc = { ...d, id: uid(), evento_id: state.evento.id, hora: time };
-    const logEntry: LogEntry = { id: uid(), time, msg: `🏷️ Descuento: ${d.cantidad} de ${pName(d.producto_id)} al ${d.porcentaje}% off`, tipo: 'descuento', metadata: { ...d, hora: time } };
+    const id = uid();
+    const localDesc = { ...d, id, evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `🏷️ Descuento: ${d.cantidad} de ${pName(d.producto_id)} al ${d.porcentaje}% off`, tipo: 'descuento', metadata: { ...localDesc } };
     
     setState(s => ({ 
       ...s, 
@@ -176,8 +180,9 @@ export default function BarraProApp() {
   const handleAddGasto = async (g: any) => {
     if (!state.evento) return;
     const time = nowTime();
-    const localGasto = { ...g, id: uid(), evento_id: state.evento.id, hora: time };
-    const logEntry: LogEntry = { id: uid(), time, msg: `💸 Gasto (${g.metodo}): $${g.monto.toLocaleString()} por ${g.concepto}`, tipo: 'gasto', metadata: { ...g, hora: time } };
+    const id = uid();
+    const localGasto = { ...g, id, evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `💸 Gasto (${g.metodo}): $${g.monto.toLocaleString()} por ${g.concepto}`, tipo: 'gasto', metadata: { ...localGasto } };
     
     setState(s => ({ 
       ...s, 
@@ -186,6 +191,35 @@ export default function BarraProApp() {
     }));
     
     api.createGasto(localGasto);
+  };
+
+  const handleRemoveLogEntry = async (logId: string) => {
+    const entry = state.log.find(l => l.id === logId);
+    if (!entry || !entry.metadata?.id) return;
+
+    const { id, tipo } = entry.metadata;
+    const tableMap: Record<string, string> = {
+      recarga: 'recargas',
+      cortesia: 'cortesias',
+      perdida: 'perdidas',
+      descuento: 'descuentos',
+      gasto: 'gastos'
+    };
+
+    const table = tableMap[entry.tipo];
+    if (table) {
+      await api.deleteRecord(table, id);
+    }
+
+    setState(s => ({
+      ...s,
+      log: s.log.filter(l => l.id !== logId),
+      recargas: s.recargas.filter(r => r.id !== id),
+      cortesias: s.cortesias.filter(c => c.id !== id),
+      perdidas: s.perdidas.filter(p => p.id !== id),
+      descuentos: s.descuentos.filter(d => d.id !== id),
+      gastos: s.gastos.filter(g => g.id !== id),
+    }));
   };
 
   const handleCierre = async (
@@ -331,6 +365,7 @@ export default function BarraProApp() {
               onAddPerdida={handleAddPerdida}
               onAddDescuento={handleAddDescuento}
               onAddGasto={handleAddGasto}
+              onRemoveLogEntry={handleRemoveLogEntry}
               onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
               onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
             />

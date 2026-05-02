@@ -25,6 +25,7 @@ interface Props {
   onAddPerdida: (p: Omit<Perdida, 'id'>) => void;
   onAddDescuento: (d: Omit<Descuento, 'id'>) => void;
   onAddGasto: (g: Omit<Gasto, 'id'>) => void;
+  onRemoveLogEntry: (logId: string) => void;
   onCierre: () => void;
   onAtras: () => void;
 }
@@ -41,7 +42,7 @@ const TIPO_LOG: Record<LogEntry['tipo'], string> = {
 
 export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
-  onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onCierre, onAtras,
+  onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onCierre, onAtras,
 }: Props) {
   const [tab, setTab] = useState<Tab>('inventario');
   const [invLocal, setInvLocal] = useState<Record<string, { cantidad: string, proveedor: string }>>(() =>
@@ -64,6 +65,32 @@ export default function Operacion({
   });
   const [guardadoInv, setGuardadoInv] = useState(Object.keys(inventarioInicial).length > 0);
   const [ticket, setTicket] = useState<LogEntry | null>(null);
+
+  // --- CÁLCULOS EN VIVO ---
+  const totalGastos = gastos.reduce((a, b) => a + Number(b.monto), 0);
+  const totalRecargas = recargas.reduce((a, b) => {
+    const p = productos.find(x => x.id === b.producto_id);
+    return a + (Number(b.cantidad) * (p?.costo || 0));
+  }, 0);
+  const totalCortesias = cortesias.reduce((a, b) => {
+    const p = productos.find(x => x.id === b.producto_id);
+    return a + (Number(b.cantidad) * (p?.costo || 0));
+  }, 0);
+  const totalPerdidas = perdidas.reduce((a, b) => a + Number(b.cantidad), 0);
+
+  // --- CÁLCULO DE VENTAS PROYECTADAS ---
+  const ventasProyectadas = productos.reduce((acc, p) => {
+    const inicial = inventarioInicial[p.id]?.cantidad || 0;
+    const masRecargas = recargas.filter(r => r.producto_id === p.id).reduce((sum, r) => sum + Number(r.cantidad), 0);
+    const menosCortesias = cortesias.filter(c => c.producto_id === p.id).reduce((sum, c) => sum + Number(c.cantidad), 0);
+    const menosPerdidas = perdidas.filter(per => per.producto_id === p.id).reduce((sum, per) => sum + Number(per.cantidad), 0);
+    
+    const disponible = inicial + masRecargas - menosCortesias - menosPerdidas;
+    const actual = Number(invLocal[p.id]?.cantidad || disponible); // Si no ha puesto nada, asume que no ha vendido nada
+    
+    const consumido = Math.max(0, disponible - actual);
+    return acc + (consumido * p.precio);
+  }, 0);
 
   const pName = (id: string) => productos.find(x => x.id === id)?.nombre ?? id;
 
@@ -134,6 +161,66 @@ export default function Operacion({
             title={evento.nombre}
             sub={`${evento.responsable} · Registro de actividad en tiempo real`}
           />
+
+          {/* MONITOR EN VIVO - DASHBOARD DE CONTROL */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+            <div className="bg-emerald-600 rounded-3xl p-4 shadow-lg shadow-emerald-200 border border-emerald-500 transition-all hover:scale-[1.02]">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="p-1.5 bg-white/20 rounded-lg text-white">
+                  <BarChart3 size={16} />
+                </div>
+                <p className="text-[9px] font-black text-emerald-100 uppercase tracking-widest">Ventas (Est.)</p>
+              </div>
+              <p className="text-xl font-black text-white leading-none tracking-tight">${ventasProyectadas.toLocaleString('es-CO')}</p>
+              <div className="mt-2">
+                <span className="text-[8px] font-bold text-white uppercase px-2 py-0.5 bg-white/10 rounded-md">Caja Proyectada</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 rounded-3xl p-4 shadow-lg border border-slate-800 transition-all hover:scale-[1.02]">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="p-1.5 bg-orange-500/20 rounded-lg text-orange-500">
+                  <Banknote size={16} />
+                </div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Salidas (Gasto)</p>
+              </div>
+              <p className="text-xl font-black text-white leading-none tracking-tight">${totalGastos.toLocaleString('es-CO')}</p>
+              <div className="mt-2 text-[8px] font-black text-orange-500 uppercase">Dinero que salió</div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 transition-all hover:scale-[1.02] hover:shadow-md">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
+                  <RefreshCw size={16} />
+                </div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recargas</p>
+              </div>
+              <p className="text-xl font-black text-slate-900 leading-none tracking-tight">${totalRecargas.toLocaleString('es-CO')}</p>
+              <div className="mt-2 text-[8px] font-bold text-slate-400 uppercase">{recargas.length} Cargas</div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 transition-all hover:scale-[1.02] hover:shadow-md">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="p-1.5 bg-violet-50 rounded-lg text-violet-600">
+                  <Gift size={16} />
+                </div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cortesías</p>
+              </div>
+              <p className="text-xl font-black text-slate-900 leading-none tracking-tight">${totalCortesias.toLocaleString('es-CO')}</p>
+              <div className="mt-2 text-[8px] font-bold text-slate-400 uppercase">{cortesias.length} Regalados</div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 transition-all hover:scale-[1.02] hover:shadow-md">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="p-1.5 bg-rose-50 rounded-lg text-rose-600">
+                  <AlertTriangle size={16} />
+                </div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Bajas</p>
+              </div>
+              <p className="text-xl font-black text-rose-600 leading-none tracking-tight">{totalPerdidas}</p>
+              <div className="mt-2 text-[8px] font-bold text-rose-400 uppercase">{perdidas.length} Reportes</div>
+            </div>
+          </div>
 
           {/* Navigation Tabs */}
           <div className="flex bg-slate-100/50 border border-slate-200 p-1.5 rounded-2xl shadow-sm mb-8 gap-1.5 overflow-x-auto">
@@ -599,13 +686,28 @@ export default function Operacion({
                         </div>
                         <p className="text-xs font-bold leading-relaxed pr-6">{l.msg}</p>
                         
-                        <button 
-                          onClick={() => setTicket(l)}
-                          className="absolute right-3 bottom-3 p-1.5 rounded-lg bg-white/20 hover:bg-white/40 text-current transition-all opacity-0 group-hover/item:opacity-100"
-                          title="Imprimir Vale"
-                        >
-                          <Printer size={14} />
-                        </button>
+                        <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 group-hover/item:opacity-100 transition-all">
+                          <button 
+                            onClick={() => setTicket(l)}
+                            className="p-1.5 rounded-lg bg-white/20 hover:bg-white/40 text-current transition-all"
+                            title="Ver Detalle"
+                          >
+                            <Printer size={12} />
+                          </button>
+                          {['recarga', 'cortesia', 'perdida', 'gasto', 'descuento'].includes(l.tipo) && (
+                            <button 
+                              onClick={() => {
+                                if (confirm('¿Seguro que deseas eliminar este registro? Esto afectará el inventario y las cuentas.')) {
+                                  onRemoveLogEntry(l.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white transition-all shadow-sm"
+                              title="Eliminar Registro"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                   </div>
                 ))}

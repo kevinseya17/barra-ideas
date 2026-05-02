@@ -56,8 +56,7 @@ export async function closeEvento(id: string): Promise<boolean> {
 }
 
 export async function deleteEventoCascade(id: string): Promise<boolean> {
-  // Para evitar errores de FK, borramos en orden inverso las tablas hijas primero
-  await supabase.from('inventario').delete().eq('evento_id', id);
+  await supabase.from('inventario_items').delete().eq('evento_id', id);
   await supabase.from('recargas').delete().eq('evento_id', id);
   await supabase.from('cortesias').delete().eq('evento_id', id);
   await supabase.from('perdidas').delete().eq('evento_id', id);
@@ -65,75 +64,64 @@ export async function deleteEventoCascade(id: string): Promise<boolean> {
   await supabase.from('gastos').delete().eq('evento_id', id);
   await supabase.from('cierres_dinero').delete().eq('evento_id', id);
   
-  // Finalmente el evento
   const { error } = await supabase.from('eventos').delete().eq('id', id);
   if (error) console.error('Error deleting evento:', error);
   return !error;
 }
 
-// INVENTARIO (Inicial / Final)
+// INVENTARIO
 export async function saveInventarioBatch(items: Omit<InventarioItem, 'id'>[]): Promise<boolean> {
   if (items.length === 0) return true;
   const { error } = await supabase.from('inventario_items').insert(items);
   if (error) {
     console.error('Error saving inventario:', error.message || error);
-    alert('Error en base de datos: ' + (error.message || 'Error desconocido'));
   }
   return !error;
 }
 
-// OPERACIONES
+// OPERACIONES (Ahora aceptamos el ID del frontend)
 export async function createRecarga(recarga: Recarga): Promise<boolean> {
-  const { id, ...dataToInsert } = recarga;
-  const { error } = await supabase.from('recargas').insert([dataToInsert]);
-  if (error) {
-    console.error('Error creating recarga:', JSON.stringify(error, null, 2));
-  }
+  const { error } = await supabase.from('recargas').insert([recarga]);
+  if (error) console.error('Error creating recarga:', JSON.stringify(error));
   return !error;
 }
 
 export async function createCortesia(cortesia: Cortesia): Promise<boolean> {
-  const { id, ...dataToInsert } = cortesia;
-  const { error } = await supabase.from('cortesias').insert([dataToInsert]);
-  if (error) {
-    console.error('Error creating cortesia:', JSON.stringify(error, null, 2));
-  }
+  const { error } = await supabase.from('cortesias').insert([cortesia]);
+  if (error) console.error('Error creating cortesia:', JSON.stringify(error));
   return !error;
 }
 
 export async function createPerdida(perdida: Perdida): Promise<boolean> {
-  const { id, ...dataToInsert } = perdida;
-  const { error } = await supabase.from('perdidas').insert([dataToInsert]);
-  if (error) {
-    console.error('Error creating perdida:', JSON.stringify(error, null, 2));
-  }
+  const { error } = await supabase.from('perdidas').insert([perdida]);
+  if (error) console.error('Error creating perdida:', JSON.stringify(error));
   return !error;
 }
 
-export async function createDescuento(descuento: Omit<Descuento, 'id'>): Promise<Descuento | null> {
-  const { data, error } = await supabase.from('descuentos').insert([descuento]).select().single();
-  if (error) {
-    console.error('Error creating descuento:', error);
-    return null;
-  }
-  return data;
+export async function createDescuento(descuento: Descuento): Promise<boolean> {
+  const { error } = await supabase.from('descuentos').insert([descuento]);
+  if (error) console.error('Error creating descuento:', error);
+  return !error;
 }
 
-export async function createGasto(gasto: Omit<Gasto, 'id'>): Promise<Gasto | null> {
-  const { data, error } = await supabase.from('gastos').insert([gasto]).select().single();
-  if (error) {
-    console.error('Error creating gasto:', error);
-    return null;
-  }
-  return data;
+export async function createGasto(gasto: Gasto): Promise<boolean> {
+  const { error } = await supabase.from('gastos').insert([gasto]);
+  if (error) console.error('Error creating gasto:', error);
+  return !error;
 }
 
-// CIERRE DE DINERO
 export async function createCierreDinero(cierre: Omit<CierreDinero, 'id'>): Promise<boolean> {
   const { error } = await supabase.from('cierres_dinero').insert([cierre]);
   if (error) console.error('Error creating cierre dinero:', error);
   return !error;
 }
+
+export async function deleteRecord(table: string, id: string): Promise<boolean> {
+  const { error } = await supabase.from(table).delete().eq('id', id);
+  if (error) console.error(`Error deleting from ${table}:`, error);
+  return !error;
+}
+
 // PROVEEDORES
 export async function getProveedores(): Promise<string[]> {
   const { data, error } = await supabase.from('proveedores').select('nombre').order('nombre');
