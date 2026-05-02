@@ -70,7 +70,14 @@ export default function Operacion({
   const totalPotencial = productos.reduce((acc, p) => {
     const ini = inventarioInicial[p.id]?.cantidad || 0;
     const recs = recargas.filter(r => r.producto_id === p.id).reduce((sum, r) => sum + Number(r.cantidad), 0);
-    return acc + ((ini + recs) * (p.precio_venta || 0));
+    
+    // Restar lo que ya no es potencial de venta
+    const cors = cortesias.filter(c => c.producto_id === p.id).reduce((sum, c) => sum + Number(c.cantidad), 0);
+    const pers = perdidas.filter(per => per.producto_id === p.id).reduce((sum, per) => sum + Number(per.cantidad), 0);
+    const descs = descuentos.filter(d => d.producto_id === p.id).reduce((sum, d) => sum + (d.valor_descontado || 0), 0);
+
+    const bruto = (ini + recs - cors - pers) * (p.precio_venta || 0);
+    return acc + bruto - descs;
   }, 0);
 
   const totalGastos = gastos.reduce((a, b) => a + Number(b.monto), 0);
