@@ -383,9 +383,9 @@ export default function BarraProApp() {
               ))}
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* INDICADOR DE NUBE */}
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+            <div className="flex items-center gap-3">
+              {/* GRUPO DE ESTADO */}
+              <div className={`flex items-center gap-2.5 px-4 py-2 rounded-2xl border transition-all shadow-sm ${
                 !isOnline ? 'bg-rose-50 border-rose-200 text-rose-500 animate-pulse' :
                 isSyncing ? 'bg-amber-50 border-amber-200 text-amber-500' :
                 'bg-emerald-50 border-emerald-200 text-emerald-500'
@@ -393,46 +393,52 @@ export default function BarraProApp() {
                 {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : 
                  !isOnline ? <AlertTriangle size={14} /> : 
                  <BarChart3 size={14} />}
-                <span className="text-[10px] font-black uppercase tracking-tighter">
+                <span className="text-[10px] font-black uppercase tracking-wider">
                   {!isOnline ? 'Sin Conexión' : isSyncing ? 'Sincronizando' : 'Nube Segura'}
                 </span>
               </div>
 
-              <button 
-                onClick={() => {
-                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
-                  const downloadAnchorNode = document.createElement('a');
-                  downloadAnchorNode.setAttribute("href", dataStr);
-                  downloadAnchorNode.setAttribute("download", `backup_barrapro_${state.evento?.nombre || 'evento'}_${new Date().toISOString().split('T')[0]}.json`);
-                  document.body.appendChild(downloadAnchorNode);
-                  downloadAnchorNode.click();
-                  downloadAnchorNode.remove();
-                }} 
-                className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors bg-white/50 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm"
-                title="Descargar copia de seguridad"
-              >
-                <PackageOpen size={14} /> Backup
-              </button>
+              {/* GRUPO DE ACCIONES */}
+              <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-2xl border border-slate-200">
+                <button 
+                  onClick={() => {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", `backup_barrapro_${state.evento?.nombre || 'evento'}_${new Date().toISOString().split('T')[0]}.json`);
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                  }} 
+                  className="p-2.5 rounded-xl hover:bg-white text-slate-400 hover:text-indigo-600 transition-all hover:shadow-sm"
+                  title="Descargar copia de seguridad (Backup)"
+                >
+                  <PackageOpen size={18} />
+                </button>
 
-              <button 
-                onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
-                className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors bg-white/50 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm"
-              >
-                <Settings size={14} /> Base de Datos
-              </button>
-              <button onClick={toggleDark} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
-                {state.isDark ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
+                <button 
+                  onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
+                  className="p-2.5 rounded-xl hover:bg-white text-slate-400 hover:text-indigo-600 transition-all hover:shadow-sm"
+                  title="Configuración de Base de Datos"
+                >
+                  <Settings size={18} />
+                </button>
+
+                <button 
+                  onClick={toggleDark} 
+                  className="p-2.5 rounded-xl hover:bg-white text-slate-400 hover:text-indigo-600 transition-all hover:shadow-sm"
+                >
+                  {state.isDark ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
+              </div>
 
               {state.evento && (
-                <div className="hidden lg:flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm shrink-0">
+                <div className="hidden lg:flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border border-slate-200 shadow-sm shrink-0 ml-2">
                   <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-[0.15em] leading-none mb-1">Evento Activo</span>
-                    <span className="text-xs font-bold text-slate-900 tracking-tight">{state.evento.nombre}</span>
+                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">Activo</span>
+                    <span className="text-xs font-black text-slate-900 tracking-tight">{state.evento.nombre}</span>
                   </div>
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                  </div>
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                 </div>
               )}
             </div>
