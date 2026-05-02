@@ -84,25 +84,28 @@ export async function saveInventarioBatch(items: Omit<InventarioItem, 'id'>[]): 
 
 // OPERACIONES
 export async function createRecarga(recarga: Recarga): Promise<boolean> {
-  const { error } = await supabase.from('recargas').insert([recarga]);
+  const { id, ...dataToInsert } = recarga;
+  const { error } = await supabase.from('recargas').insert([dataToInsert]);
   if (error) {
-    console.error('Error creating recarga:', JSON.stringify(error, null, 2), error.message, error.details, error.hint);
+    console.error('Error creating recarga:', JSON.stringify(error, null, 2));
   }
   return !error;
 }
 
 export async function createCortesia(cortesia: Cortesia): Promise<boolean> {
-  const { error } = await supabase.from('cortesias').insert([cortesia]);
+  const { id, ...dataToInsert } = cortesia;
+  const { error } = await supabase.from('cortesias').insert([dataToInsert]);
   if (error) {
-    console.error('Error creating cortesia:', JSON.stringify(error, null, 2), error.message, error.details, error.hint);
+    console.error('Error creating cortesia:', JSON.stringify(error, null, 2));
   }
   return !error;
 }
 
 export async function createPerdida(perdida: Perdida): Promise<boolean> {
-  const { error } = await supabase.from('perdidas').insert([perdida]);
+  const { id, ...dataToInsert } = perdida;
+  const { error } = await supabase.from('perdidas').insert([dataToInsert]);
   if (error) {
-    console.error('Error creating perdida:', JSON.stringify(error, null, 2), error.message, error.details, error.hint);
+    console.error('Error creating perdida:', JSON.stringify(error, null, 2));
   }
   return !error;
 }

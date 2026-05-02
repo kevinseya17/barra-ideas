@@ -54,7 +54,7 @@ export const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-export const uid = () => Math.random().toString(36).slice(2, 10);
+export const uid = () => crypto.randomUUID();
 
 export const nowTime = () =>
   new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });

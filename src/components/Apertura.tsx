@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, PackageOpen, Settings } from 'lucide-react';
+import { Plus, Trash2, PackageOpen, Settings, LayoutGrid, List } from 'lucide-react';
 import { Producto } from '@/types';
 import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
@@ -45,6 +45,7 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
     }
     return {};
   });
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   useEffect(() => {
     const init = async () => {
@@ -211,94 +212,173 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
       {/* Productos */}
       <Card className="p-8 mb-8">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-              <Plus size={20} />
+          <div className="flex items-center gap-6">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                <Plus size={20} />
+              </div>
+              Productos del evento
+            </h2>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Vista Cuadrícula"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                title="Vista Lista"
+              >
+                <List size={16} />
+              </button>
             </div>
-            Productos del evento
-          </h2>
+          </div>
           {productos.length > 0 && <Badge color="indigo">{productos.length} items</Badge>}
         </div>
         
         {errores.productos && <p className="text-rose-500 text-[11px] font-bold mb-4 ml-1">{errores.productos}</p>}
 
-        {/* Lista de Productos - Tarjetas Premium */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-          {productos.map(p => (
-            <div key={p.id} className="group relative bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 hover:border-indigo-100 transition-all duration-300 animate-in fade-in zoom-in">
-              {/* Botón Eliminar Flotante */}
-              <button 
-                onClick={() => eliminarProducto(p.id)} 
-                className="absolute top-4 right-4 p-2 rounded-full bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all duration-200"
-              >
-                <Trash2 size={14} />
-              </button>
+        {/* Lista de Productos */}
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+            {productos.map(p => (
+              <div key={p.id} className="group relative bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 hover:border-indigo-100 transition-all duration-300 animate-in fade-in zoom-in">
+                <button 
+                  onClick={() => eliminarProducto(p.id)} 
+                  className="absolute top-4 right-4 p-2 rounded-full bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                >
+                  <Trash2 size={14} />
+                </button>
 
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                  <PackageOpen size={24} />
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-inner group-hover:scale-110 transition-transform duration-300">
+                    <PackageOpen size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-black text-slate-800 text-sm truncate uppercase tracking-tight">{p.nombre}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${catColor[p.categoria] || 'bg-slate-100 text-slate-500'}`}>
+                        {p.categoria}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">{p.unidad}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="font-black text-slate-800 text-sm truncate uppercase tracking-tight">{p.nombre}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${catColor[p.categoria] || 'bg-slate-100 text-slate-500'}`}>
-                      {p.categoria}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">{p.unidad}</span>
+
+                <div className="grid grid-cols-2 gap-3 mb-6 bg-slate-50/50 p-3 rounded-2xl border border-slate-50">
+                  <div className="text-center">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Costo</p>
+                    <p className="text-xs font-black text-slate-600">${p.costo.toLocaleString('es-CO')}</p>
+                  </div>
+                  <div className="text-center border-l border-slate-100">
+                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5">Venta</p>
+                    <p className="text-xs font-black text-indigo-600">${p.precio.toLocaleString('es-CO')}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="relative">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Cantidad Inicial</p>
+                    <input 
+                      type="number" 
+                      className="w-full h-11 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl text-center font-black text-slate-800 transition-all outline-none placeholder:text-slate-200"
+                      value={formInv[p.id]?.cantidad || ''} 
+                      onChange={e => setFormInv(prev => ({ ...prev, [p.id]: { ...prev[p.id], cantidad: e.target.value } }))} 
+                      placeholder="0" 
+                    />
+                  </div>
+                  <div className="relative">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Proveedor</p>
+                    <select 
+                      className="w-full h-11 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-4 font-bold text-slate-700 text-xs transition-all outline-none appearance-none"
+                      value={formInv[p.id]?.proveedor || ''} 
+                      onChange={e => setFormInv(prev => ({ ...prev, [p.id]: { ...prev[p.id], proveedor: e.target.value } }))}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {proveedores.map(prov => <option key={prov} value={prov}>{prov}</option>)}
+                    </select>
+                    <div className="absolute right-4 bottom-3 pointer-events-none text-slate-300">
+                      <Plus size={14} />
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-6 bg-slate-50/50 p-3 rounded-2xl border border-slate-50">
-                <div className="text-center">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Costo</p>
-                  <p className="text-xs font-black text-slate-600">${p.costo.toLocaleString('es-CO')}</p>
-                </div>
-                <div className="text-center border-l border-slate-100">
-                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5">Venta</p>
-                  <p className="text-xs font-black text-indigo-600">${p.precio.toLocaleString('es-CO')}</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="relative">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Cantidad Inicial</p>
-                  <input 
-                    type="number" 
-                    className="w-full h-11 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl text-center font-black text-slate-800 transition-all outline-none placeholder:text-slate-200"
-                    value={formInv[p.id]?.cantidad || ''} 
-                    onChange={e => setFormInv(prev => ({ ...prev, [p.id]: { ...prev[p.id], cantidad: e.target.value } }))} 
-                    placeholder="0" 
-                  />
-                </div>
-                <div className="relative">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Proveedor</p>
-                  <select 
-                    className="w-full h-11 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl px-4 font-bold text-slate-700 text-xs transition-all outline-none appearance-none"
-                    value={formInv[p.id]?.proveedor || ''} 
-                    onChange={e => setFormInv(prev => ({ ...prev, [p.id]: { ...prev[p.id], proveedor: e.target.value } }))}
-                  >
-                    <option value="">Seleccionar...</option>
-                    {proveedores.map(prov => <option key={prov} value={prov}>{prov}</option>)}
-                  </select>
-                  <div className="absolute right-4 bottom-3 pointer-events-none text-slate-300">
-                    <Plus size={14} />
-                  </div>
-                </div>
-              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-hidden border border-slate-100 rounded-3xl mb-10 shadow-sm bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                  <tr>
+                    <th className="px-6 py-4">Producto</th>
+                    <th className="px-4 py-4 text-center">Cat / Und</th>
+                    <th className="px-4 py-4 text-center">Costo / Venta</th>
+                    <th className="px-4 py-4 text-center">Cant. Inicial</th>
+                    <th className="px-4 py-4">Proveedor</th>
+                    <th className="px-6 py-4"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {productos.map(p => (
+                    <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group">
+                      <td className="px-6 py-4 font-bold text-slate-800 text-sm uppercase tracking-tight">{p.nombre}</td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <Badge color={catColor[p.categoria] || 'slate'}>{p.categoria}</Badge>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase">{p.unidad}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] font-bold text-slate-400">${p.costo.toLocaleString('es-CO')}</span>
+                          <span className="text-sm font-black text-indigo-600">${p.precio.toLocaleString('es-CO')}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <input 
+                          type="number" 
+                          className="w-20 h-9 bg-slate-100 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl text-center font-black text-slate-800 transition-all outline-none mx-auto block"
+                          value={formInv[p.id]?.cantidad || ''} 
+                          onChange={e => setFormInv(prev => ({ ...prev, [p.id]: { ...prev[p.id], cantidad: e.target.value } }))} 
+                          placeholder="0" 
+                        />
+                      </td>
+                      <td className="px-4 py-4">
+                        <select 
+                          className="w-full max-w-[150px] h-9 bg-slate-100 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl px-2 font-bold text-slate-700 text-[11px] transition-all outline-none"
+                          value={formInv[p.id]?.proveedor || ''} 
+                          onChange={e => setFormInv(prev => ({ ...prev, [p.id]: { ...prev[p.id], proveedor: e.target.value } }))}
+                        >
+                          <option value="">Prov...</option>
+                          {proveedores.map(prov => <option key={prov} value={prov}>{prov}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => eliminarProducto(p.id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-          
-          {productos.length === 0 && (
-            <div className="col-span-full text-center py-20 border-2 border-dashed border-slate-100 rounded-[3rem] bg-slate-50/30">
-              <div className="w-16 h-16 bg-white rounded-3xl shadow-sm flex items-center justify-center mx-auto mb-4 text-slate-200">
-                <PackageOpen size={32} />
-              </div>
-              <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">No hay productos en la lista</p>
-              <p className="text-slate-300 text-xs mt-2 italic text-balance">Configura tu primer producto abajo para empezar</p>
+          </div>
+        )}
+        
+        {productos.length === 0 && (
+          <div className="col-span-full text-center py-20 border-2 border-dashed border-slate-100 rounded-[3rem] bg-slate-50/30 mb-10">
+            <div className="w-16 h-16 bg-white rounded-3xl shadow-sm flex items-center justify-center mx-auto mb-4 text-slate-200">
+              <PackageOpen size={32} />
             </div>
-          )}
-        </div>
+            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">No hay productos en la lista</p>
+            <p className="text-slate-300 text-xs mt-2 italic text-balance">Configura tu primer producto abajo para empezar</p>
+          </div>
+        )}
 
         {/* Agregar producto */}
         <div className="bg-slate-50/50 rounded-3xl p-6 border border-slate-200">
