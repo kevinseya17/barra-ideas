@@ -866,6 +866,28 @@ export default function Operacion({
                             </div>
                           </>
                         )}
+                        {ticket.tipo === 'descuento' && (
+                          <>
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-slate-400 font-bold">Porcentaje Aplicado:</span>
+                              <span className="font-black text-blue-600">-{ticket.metadata?.porcentaje}%</span>
+                            </div>
+                            <div className="flex justify-between text-[11px] pt-1">
+                              <span className="text-slate-400 font-bold">Valor Descontado (Ahorro):</span>
+                              <span className="font-black text-blue-600">-${Number(ticket.metadata?.valor_descontado).toLocaleString('es-CO')}</span>
+                            </div>
+                            <div className="pt-2 border-t border-slate-200">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Motivo / Cliente:</p>
+                              <p className="text-[11px] font-bold text-slate-800 italic">&ldquo;{ticket.metadata?.motivo || 'Promoción de evento'}&rdquo;</p>
+                            </div>
+                            <div className="pt-2 border-t border-slate-900 flex justify-between items-center">
+                              <span className="text-[10px] font-black uppercase text-slate-900">Precio Final Cobrado:</span>
+                              <span className="text-sm font-black text-slate-900">
+                                ${((prod.precio * (ticket.metadata?.cantidad || 1)) - (ticket.metadata?.valor_descontado || 0)).toLocaleString('es-CO')}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </>
                   ) : ticket.msg.includes('Inventario inicial') && ticket.metadata ? (
