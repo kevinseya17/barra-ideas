@@ -355,7 +355,7 @@ export default function BarraProApp() {
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-slate-200/40 blur-[120px] rounded-full -z-10 translate-x-1/4 -translate-y-1/4" />
 
         <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 transition-colors duration-500">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+          <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between gap-6">
             <div className="flex items-center gap-4 shrink-0">
               <div>
                 <span className="text-lg font-bold text-slate-900 tracking-tight block leading-none">BarraPRO</span>
@@ -445,7 +445,7 @@ export default function BarraProApp() {
           </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-[1600px] mx-auto p-6">
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
           {state.step === 'apertura' && <Apertura onContinuar={handleApertura} eventoInicial={state.evento} productosIniciales={state.productos.length > 0 ? state.productos : undefined} proveedoresIniciales={state.proveedores.length > 0 ? state.proveedores : undefined} invInicial={state.inventarioInicial} onAdmin={() => setState(s => ({ ...s, step: 'admin' }))} />}
           {state.step === 'admin' && (

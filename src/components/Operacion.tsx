@@ -258,15 +258,14 @@ export default function Operacion({
           </div>
 
           <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
-            {/* INVENTARIO INICIAL */}
             {tab === 'inventario' && (
-              <Card className="p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-lg font-bold text-slate-900">Control de Inventario Inicial</h3>
-                  <Badge color={guardadoInv ? 'indigo' : 'yellow'}>{guardadoInv ? 'Sincronizado' : 'Pendiente'}</Badge>
+              <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-slate-100 shadow-2xl">
+                <div className="flex items-center justify-between mb-10">
+                  <h3 className="text-xl font-black text-slate-900">Control de Inventario Inicial</h3>
+                  <Badge color={guardadoInv ? 'emerald' : 'yellow'}>{guardadoInv ? 'Sincronizado' : 'Pendiente'}</Badge>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
                   {productos.map(p => (
                     <div key={p.id} className="flex flex-col gap-4 p-5 rounded-3xl bg-slate-50 border border-slate-100 hover:border-indigo-100 transition-all">
                       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -386,12 +385,15 @@ export default function Operacion({
 
             {/* RECARGAS */}
             {tab === 'recargas' && (
-              <Card className="p-8">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                    <RefreshCw size={20} />
+              <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-indigo-50 shadow-2xl">
+                <div className="flex items-center gap-5 mb-10">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                    <RefreshCw size={28} />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">Gestión de Recargas</h3>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Gestión de Recargas</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Suministro de mercancía a la barra</p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
@@ -438,12 +440,15 @@ export default function Operacion({
 
             {/* CORTESÍAS */}
             {tab === 'cortesias' && (
-              <Card className="p-8">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600">
-                    <Gift size={20} />
+              <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-violet-50 shadow-2xl">
+                <div className="flex items-center gap-5 mb-10">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-200">
+                    <Gift size={28} />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">Registro de Cortesías</h3>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Registro de Cortesías</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Autorización de consumos gratis</p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -492,12 +497,15 @@ export default function Operacion({
 
             {/* PÉRDIDAS */}
             {tab === 'perdidas' && (
-              <Card className="p-8">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
-                    <AlertTriangle size={20} />
+              <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-rose-50 shadow-2xl">
+                <div className="flex items-center gap-5 mb-10">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-rose-500 flex items-center justify-center text-white shadow-lg shadow-rose-200">
+                    <AlertTriangle size={28} />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">Bajas y Pérdidas</h3>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Bajas y Pérdidas</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Reporte de mermas, daños o robos</p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
@@ -539,14 +547,14 @@ export default function Operacion({
 
             {/* DESCUENTOS */}
             {tab === 'descuentos' && (
-              <Card className="p-8">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                    <Percent size={20} />
+              <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-blue-50 shadow-2xl">
+                <div className="flex items-center gap-5 mb-10">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                    <Percent size={28} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Descuentos Especiales</h3>
-                    <p className="text-xs text-slate-500">Ventas con precio rebajado o negociado</p>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Descuentos Especiales</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Ventas con precio rebajado o negociado</p>
                   </div>
                 </div>
 
@@ -596,14 +604,14 @@ export default function Operacion({
 
             {/* GASTOS / PAGOS */}
             {tab === 'gastos' && (
-              <Card className="p-8">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
-                    <Banknote size={20} />
+              <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-orange-50 shadow-2xl">
+                <div className="flex items-center gap-5 mb-10">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-200">
+                    <Banknote size={28} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Salidas de Efectivo (Gastos)</h3>
-                    <p className="text-xs text-slate-500">Plata que sale de la caja (Ej: Pago a proveedores, hielo)</p>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Salidas de Efectivo (Gastos)</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Dinero que sale de la caja para pagos inmediatos</p>
                   </div>
                 </div>
 
@@ -660,7 +668,7 @@ export default function Operacion({
         </div>
 
         {/* ACTIVITY TIMELINE SIDEBAR */}
-        <div className="w-full lg:w-80 shrink-0">
+        <div className="w-full lg:w-72 shrink-0">
           <Card className="p-6 sticky top-24 overflow-hidden">
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
             
