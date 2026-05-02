@@ -163,62 +163,72 @@ export default function Operacion({
           />
 
           {/* MONITOR EN VIVO - DASHBOARD DE CONTROL */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-5 mb-10">
-            <div className="bg-emerald-600 rounded-[2rem] p-6 shadow-xl shadow-emerald-100 border border-emerald-500 transition-all hover:scale-[1.03] overflow-hidden">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-white/20 rounded-xl text-white">
-                  <BarChart3 size={20} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            <div className="bg-emerald-600 rounded-[2.5rem] p-8 shadow-xl shadow-emerald-100 border border-emerald-500 transition-all hover:scale-[1.03]">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-2.5 bg-white/20 rounded-2xl text-white">
+                  <BarChart3 size={24} />
                 </div>
-                <p className="text-[10px] font-black text-emerald-100 uppercase tracking-[0.2em] truncate">Ventas (Est.)</p>
+                <p className="text-[11px] font-black text-emerald-100 uppercase tracking-[0.2em]">Ventas (Est.)</p>
               </div>
-              <p className="text-2xl sm:text-xl lg:text-2xl xl:text-3xl font-black text-white leading-none tracking-tight truncate">${ventasProyectadas.toLocaleString('es-CO')}</p>
-              <div className="mt-4">
-                <span className="text-[9px] font-bold text-white uppercase px-3 py-1 bg-white/10 rounded-lg border border-white/10">Caja Proyectada</span>
+              <p className="text-4xl font-black text-white leading-none tracking-tight">
+                ${ventasProyectadas.toLocaleString('es-CO')}
+              </p>
+              <div className="mt-5">
+                <span className="text-[10px] font-bold text-white uppercase px-4 py-1.5 bg-white/10 rounded-xl border border-white/10">Caja Proyectada</span>
               </div>
             </div>
 
-            <div className="bg-slate-900 rounded-[2rem] p-6 shadow-xl border border-slate-800 transition-all hover:scale-[1.03] overflow-hidden">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-orange-500/20 rounded-xl text-orange-500">
-                  <Banknote size={20} />
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-xl border border-slate-800 transition-all hover:scale-[1.03]">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-2.5 bg-orange-500/20 rounded-2xl text-orange-500">
+                  <Banknote size={24} />
                 </div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] truncate">Salidas (Gasto)</p>
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Salidas (Gasto)</p>
               </div>
-              <p className="text-2xl sm:text-xl lg:text-2xl xl:text-3xl font-black text-white leading-none tracking-tight truncate">${totalGastos.toLocaleString('es-CO')}</p>
-              <div className="mt-4 text-[9px] font-black text-orange-500 uppercase tracking-widest">Dinero que salió</div>
+              <p className="text-4xl font-black text-white leading-none tracking-tight">
+                ${totalGastos.toLocaleString('es-CO')}
+              </p>
+              <div className="mt-5 text-[10px] font-black text-orange-500 uppercase tracking-widest px-4 py-1.5 bg-orange-500/10 rounded-xl border border-orange-500/10 inline-block">Dinero que salió</div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 transition-all hover:scale-[1.03] hover:shadow-xl overflow-hidden">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
-                  <RefreshCw size={20} />
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 transition-all hover:scale-[1.03] hover:shadow-2xl">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-2.5 bg-indigo-50 rounded-2xl text-indigo-600">
+                  <RefreshCw size={24} />
                 </div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] truncate">Recargas</p>
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Recargas</p>
               </div>
-              <p className="text-2xl sm:text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 leading-none tracking-tight truncate">${totalRecargas.toLocaleString('es-CO')}</p>
-              <div className="mt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">{recargas.length} Movimientos</div>
+              <p className="text-4xl font-black text-slate-900 leading-none tracking-tight">
+                ${totalRecargas.toLocaleString('es-CO')}
+              </p>
+              <div className="mt-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-1.5 bg-slate-50 rounded-xl border border-slate-100 inline-block">{recargas.length} Movimientos</div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 transition-all hover:scale-[1.03] hover:shadow-xl overflow-hidden">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-violet-50 rounded-xl text-violet-600">
-                  <Gift size={20} />
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 transition-all hover:scale-[1.03] hover:shadow-2xl">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-2.5 bg-violet-50 rounded-2xl text-violet-600">
+                  <Gift size={24} />
                 </div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] truncate">Cortesías</p>
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Cortesías</p>
               </div>
-              <p className="text-2xl sm:text-xl lg:text-2xl xl:text-3xl font-black text-slate-900 leading-none tracking-tight truncate">${totalCortesias.toLocaleString('es-CO')}</p>
-              <div className="mt-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">{cortesias.length} Regalados</div>
+              <p className="text-4xl font-black text-slate-900 leading-none tracking-tight">
+                ${totalCortesias.toLocaleString('es-CO')}
+              </p>
+              <div className="mt-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-1.5 bg-slate-50 rounded-xl border border-slate-100 inline-block">{cortesias.length} Regalados</div>
             </div>
 
-            <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 transition-all hover:scale-[1.03] hover:shadow-xl overflow-hidden">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-rose-50 rounded-xl text-rose-600">
-                  <AlertTriangle size={20} />
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 transition-all hover:scale-[1.03] hover:shadow-2xl">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-2.5 bg-rose-50 rounded-2xl text-rose-600">
+                  <AlertTriangle size={24} />
                 </div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] truncate">Bajas</p>
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Bajas</p>
               </div>
-              <p className="text-2xl sm:text-xl lg:text-2xl xl:text-3xl font-black text-rose-600 leading-none tracking-tight truncate">{totalPerdidas}</p>
-              <div className="mt-4 text-[9px] font-bold text-rose-400 uppercase tracking-widest">{perdidas.length} Reportes</div>
+              <p className="text-4xl font-black text-rose-600 leading-none tracking-tight">
+                {totalPerdidas} Und
+              </p>
+              <div className="mt-5 text-[10px] font-bold text-rose-400 uppercase tracking-widest px-4 py-1.5 bg-rose-50 rounded-xl border border-rose-100 inline-block">{perdidas.length} Reportes</div>
             </div>
           </div>
 
