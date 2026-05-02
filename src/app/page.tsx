@@ -68,11 +68,52 @@ export default function BarraProApp() {
 
   // Cargar estado guardado al iniciar
   useEffect(() => {
-    const saved = loadState();
-    if (saved.step !== 'apertura' || saved.evento) {
-      setState(saved);
-    }
+    const init = async () => {
+      // 1. Intentar cargar de localStorage (rápido)
+      const saved = loadState();
+      if (saved.step !== 'apertura' || saved.evento) {
+        setState(saved);
+      }
+
+      // 2. SIEMPRE verificar en la nube si hay un evento abierto (seguro)
+      const evActivo = await api.getEventoActivo();
+      if (evActivo) {
+        // Si el evento en la nube es distinto al de local o no hay local, rehidratar
+        if (!saved.evento || saved.evento.id !== evActivo.id) {
+          rehydrateFromCloud(evActivo);
+        }
+      }
+    };
+    init();
   }, []);
+
+  const rehydrateFromCloud = async (ev: Evento) => {
+    const [prods, provs, data] = await Promise.all([
+      api.getProductos(),
+      api.getProveedores(),
+      api.getEventoData(ev.id)
+    ]);
+
+    const invInicial: Record<string, { cantidad: number; proveedor: string }> = {};
+    data.inventario.filter(i => i.tipo === 'inicial').forEach(i => {
+      invInicial[i.producto_id] = { cantidad: i.cantidad, proveedor: i.proveedor || '' };
+    });
+
+    setState(s => ({
+      ...s,
+      step: 'operacion',
+      evento: ev,
+      productos: prods,
+      proveedores: provs,
+      inventarioInicial: invInicial,
+      recargas: data.recargas,
+      cortesias: data.cortesias,
+      perdidas: data.perdidas,
+      descuentos: data.descuentos,
+      gastos: data.gastos,
+      log: [{ id: uid(), time: nowTime(), msg: '🔄 Estado restaurado desde la nube', tipo: 'info' }, ...s.log]
+    }));
+  };
 
   // Guardar estado en localStorage cada vez que cambia
   useEffect(() => {

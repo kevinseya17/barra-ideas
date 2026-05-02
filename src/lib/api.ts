@@ -41,6 +41,32 @@ export async function getEventos(): Promise<Evento[]> {
   return data;
 }
 
+export async function getEventoActivo(): Promise<Evento | null> {
+  const { data, error } = await supabase.from('eventos').select('*').eq('estado', 'abierto').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) return null;
+  return data;
+}
+
+export async function getEventoData(eventoId: string) {
+  const [recargas, cortesias, perdidas, descuentos, gastos, inventario] = await Promise.all([
+    supabase.from('recargas').select('*').eq('evento_id', eventoId),
+    supabase.from('cortesias').select('*').eq('evento_id', eventoId),
+    supabase.from('perdidas').select('*').eq('evento_id', eventoId),
+    supabase.from('descuentos').select('*').eq('evento_id', eventoId),
+    supabase.from('gastos').select('*').eq('evento_id', eventoId),
+    supabase.from('inventario_items').select('*').eq('evento_id', eventoId),
+  ]);
+
+  return {
+    recargas: recargas.data || [],
+    cortesias: cortesias.data || [],
+    perdidas: perdidas.data || [],
+    descuentos: descuentos.data || [],
+    gastos: gastos.data || [],
+    inventario: inventario.data || [],
+  };
+}
+
 export async function createEvento(evento: Omit<Evento, 'id' | 'estado' | 'created_at'>): Promise<Evento | null> {
   const { data, error } = await supabase.from('eventos').insert([{ ...evento, estado: 'abierto' }]).select().single();
   if (error) {
