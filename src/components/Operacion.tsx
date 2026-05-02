@@ -1,7 +1,7 @@
 
 'use client';
 import React, { useState } from 'react';
-import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, PackageOpen, Percent, Banknote } from 'lucide-react';
+import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, PackageOpen, Percent, Banknote, Trash2 } from 'lucide-react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from '@/types';
 import { uid, nowTime } from '@/utils/calculos';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
