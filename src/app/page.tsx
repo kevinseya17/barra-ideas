@@ -13,7 +13,7 @@ import AdminPanel from '@/components/AdminPanel';
 type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin';
 const STEPS: Step[] = ['apertura', 'operacion', 'cierre', 'reporte'];
 const STEP_LABELS: Record<Step, string> = {
-  apertura: '01 Apertura', operacion: '02 Operación', cierre: '03 Cierre', reporte: '04 Reporte',
+  apertura: '01 Apertura', operacion: '02 Operación', cierre: '03 Cierre', reporte: '04 Reporte', admin: '05 Admin'
 };
 
 interface AppState {

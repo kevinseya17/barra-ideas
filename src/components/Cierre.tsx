@@ -40,7 +40,6 @@ export default function Cierre({ evento, productos, inventarioInicial, recargas,
         step="PASO 3 / CIERRE DE EVENTO"
         title="Cierre de Caja y Cuadre"
         sub="Ingrese el conteo físico final y el total de dinero recaudado para generar el informe."
-        color="text-indigo-600"
       />
 
       {/* Inventario final */}
