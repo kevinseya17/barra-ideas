@@ -1,15 +1,16 @@
 'use client';
-import React, { useState } from 'react';
-import { Producto, Recarga, Cortesia, Perdida, LogEntry, Evento } from '@/types';
+import React, { useState, useEffect } from 'react';
+import { Producto, Recarga, Cortesia, Perdida, LogEntry, Evento, Gasto, Descuento } from '@/types';
 import { uid, nowTime, calcularResumen } from '@/utils/calculos';
 import * as api from '@/lib/api';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Settings } from 'lucide-react';
 import Apertura from '@/components/Apertura';
 import Operacion from '@/components/Operacion';
 import Cierre from '@/components/Cierre';
 import Reporte from '@/components/Reporte';
+import AdminPanel from '@/components/AdminPanel';
 
-type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte';
+type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin';
 const STEPS: Step[] = ['apertura', 'operacion', 'cierre', 'reporte'];
 const STEP_LABELS: Record<Step, string> = {
   apertura: '01 Apertura', operacion: '02 Operación', cierre: '03 Cierre', reporte: '04 Reporte',
@@ -17,12 +18,15 @@ const STEP_LABELS: Record<Step, string> = {
 
 interface AppState {
   step: Step;
-  evento: Evento | null;
+  evento: Omit<Evento, 'created_at'> | null;
   productos: Producto[];
-  inventarioInicial: Record<string, number>;
+  proveedores: string[];
+  inventarioInicial: Record<string, { cantidad: number; proveedor: string }>;
   recargas: Recarga[];
   cortesias: Cortesia[];
   perdidas: Perdida[];
+  descuentos: Descuento[];
+  gastos: Gasto[];
   inventarioFinal: Record<string, number>;
   dinero: { efectivo: number; datafono: number; nequi: number };
   log: LogEntry[];
@@ -30,68 +34,158 @@ interface AppState {
 }
 
 const INIT: AppState = {
-  step: 'apertura', evento: null, productos: [],
-  inventarioInicial: {}, recargas: [], cortesias: [], perdidas: [],
-  inventarioFinal: {}, dinero: { efectivo: 0, datafono: 0, nequi: 0 }, log: [],
+  step: 'apertura',
+  evento: null,
+  productos: [],
+  proveedores: [],
+  inventarioInicial: {},
+  recargas: [],
+  cortesias: [],
+  perdidas: [],
+  descuentos: [],
+  gastos: [],
+  inventarioFinal: {}, 
+  dinero: { efectivo: 0, datafono: 0, nequi: 0 }, 
+  log: [],
   isDark: false,
 };
+
+const STORAGE_KEY = 'barrapro_state_v2';
+
+function loadState(): AppState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return INIT;
+    return { ...INIT, ...JSON.parse(raw) };
+  } catch {
+    return INIT;
+  }
+}
 
 export default function BarraProApp() {
   const [state, setState] = useState<AppState>(INIT);
   const stepIdx = STEPS.indexOf(state.step);
 
-  const addLog = (msg: string, tipo: LogEntry['tipo']) =>
-    setState(s => ({ ...s, log: [{ id: uid(), time: nowTime(), msg, tipo }, ...s.log] }));
+  // Cargar estado guardado al iniciar
+  useEffect(() => {
+    const saved = loadState();
+    if (saved.step !== 'apertura' || saved.evento) {
+      setState(saved);
+    }
+  }, []);
+
+  // Guardar estado en localStorage cada vez que cambia
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {}
+  }, [state]);
+
+  const addLog = (msg: string, tipo: LogEntry['tipo'], metadata?: any) =>
+    setState(s => ({ ...s, log: [{ id: uid(), time: nowTime(), msg, tipo, metadata }, ...s.log] }));
+
+  const pName = (id: string) => state.productos.find(p => p.id === id)?.nombre || id;
 
   const handleApertura = async (
     eventoInfo: { nombre: string; fecha: string; responsable: string; caja_inicial: number },
-    productos: Producto[]
+    productos: Producto[],
+    proveedores: string[],
+    invInicial: Record<string, { cantidad: number; proveedor: string }>
   ) => {
     const ev = await api.createEvento(eventoInfo);
     if (!ev) return alert('Error al conectar con la base de datos Supabase');
-    setState(s => ({ ...s, evento: ev, productos, step: 'operacion' }));
+    setState(s => ({ ...s, evento: ev, productos, proveedores, inventarioInicial: invInicial, step: 'operacion' }));
     addLog(`✅ Evento "${ev.nombre}" abierto`, 'info');
   };
 
-  const handleSaveInicial = (inv: Record<string, number>) => {
+  const handleSaveInicial = (inv: Record<string, { cantidad: number; proveedor: string }>) => {
     setState(s => ({ ...s, inventarioInicial: inv }));
-    addLog('📦 Inventario inicial registrado', 'info');
+    addLog('📦 Inventario inicial registrado', 'info', inv);
     if (state.evento) {
-      const items = Object.entries(inv).map(([prodId, cant]) => ({
+      const items = Object.entries(inv).map(([producto_id, data]) => ({
         evento_id: state.evento!.id,
-        producto_id: prodId,
+        producto_id,
         tipo: 'inicial' as const,
-        cantidad: cant
+        cantidad: data.cantidad,
+        proveedor: data.proveedor
       }));
       api.saveInventarioBatch(items);
     }
   };
 
-  const handleAddRecarga = async (r: Omit<Recarga, 'id'>) => {
+  const handleAddRecarga = async (r: any) => {
     if (!state.evento) return;
-    const rec = await api.createRecarga({ ...r, evento_id: state.evento.id });
-    if (!rec) return;
-    const prod = state.productos.find(p => p.id === r.producto_id);
-    setState(s => ({ ...s, recargas: [rec, ...s.recargas] }));
-    addLog(`🔄 Recarga: ${r.cantidad} × ${prod?.nombre ?? r.producto_id}`, 'recarga');
+    const time = nowTime();
+    const localRec = { ...r, id: uid(), evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `➕ Recarga: ${r.cantidad} unidades de ${pName(r.producto_id)} (Proveedor: ${r.proveedor || 'Sin especificar'})`, tipo: 'recarga', metadata: { ...r, hora: time } };
+    
+    setState(s => ({ 
+      ...s, 
+      recargas: [localRec, ...s.recargas],
+      log: [logEntry, ...s.log]
+    }));
+    
+    api.createRecarga(localRec);
   };
 
-  const handleAddCortesia = async (c: Omit<Cortesia, 'id'>) => {
+  const handleAddCortesia = async (c: any) => {
     if (!state.evento) return;
-    const cor = await api.createCortesia({ ...c, evento_id: state.evento.id });
-    if (!cor) return;
-    const prod = state.productos.find(p => p.id === c.producto_id);
-    setState(s => ({ ...s, cortesias: [cor, ...s.cortesias] }));
-    addLog(`🎁 Cortesía: ${c.cantidad} × ${prod?.nombre} → ${c.persona}`, 'cortesia');
+    const time = nowTime();
+    const localCor = { ...c, id: uid(), evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `🎁 Cortesía: ${c.cantidad} de ${pName(c.producto_id)} para ${c.persona}`, tipo: 'cortesia', metadata: { ...c, hora: time } };
+    
+    setState(s => ({ 
+      ...s, 
+      cortesias: [localCor, ...s.cortesias],
+      log: [logEntry, ...s.log]
+    }));
+    
+    api.createCortesia(localCor);
   };
 
-  const handleAddPerdida = async (p: Omit<Perdida, 'id'>) => {
+  const handleAddPerdida = async (p: any) => {
     if (!state.evento) return;
-    const per = await api.createPerdida({ ...p, evento_id: state.evento.id });
-    if (!per) return;
-    const prod = state.productos.find(x => x.id === p.producto_id);
-    setState(s => ({ ...s, perdidas: [per, ...s.perdidas] }));
-    addLog(`⚠️ Pérdida: ${p.cantidad} × ${prod?.nombre}${p.motivo ? ' — ' + p.motivo : ''}`, 'perdida');
+    const time = nowTime();
+    const localPer = { ...p, id: uid(), evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `⚠️ Pérdida: ${p.cantidad} de ${pName(p.producto_id)} - ${p.motivo}`, tipo: 'perdida', metadata: { ...p, hora: time } };
+    
+    setState(s => ({ 
+      ...s, 
+      perdidas: [localPer, ...s.perdidas],
+      log: [logEntry, ...s.log]
+    }));
+    
+    api.createPerdida(localPer);
+  };
+
+  const handleAddDescuento = async (d: any) => {
+    if (!state.evento) return;
+    const time = nowTime();
+    const localDesc = { ...d, id: uid(), evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `🏷️ Descuento: ${d.cantidad} de ${pName(d.producto_id)} al ${d.porcentaje}% off`, tipo: 'descuento', metadata: { ...d, hora: time } };
+    
+    setState(s => ({ 
+      ...s, 
+      descuentos: [localDesc, ...s.descuentos],
+      log: [logEntry, ...s.log]
+    }));
+    
+    api.createDescuento(localDesc);
+  };
+
+  const handleAddGasto = async (g: any) => {
+    if (!state.evento) return;
+    const time = nowTime();
+    const localGasto = { ...g, id: uid(), evento_id: state.evento.id, hora: time };
+    const logEntry: LogEntry = { id: uid(), time, msg: `💸 Gasto (${g.metodo}): $${g.monto.toLocaleString()} por ${g.concepto}`, tipo: 'gasto', metadata: { ...g, hora: time } };
+    
+    setState(s => ({ 
+      ...s, 
+      gastos: [localGasto, ...s.gastos],
+      log: [logEntry, ...s.log]
+    }));
+    
+    api.createGasto(localGasto);
   };
 
   const handleCierre = async (
@@ -115,12 +209,28 @@ export default function BarraProApp() {
 
   const resumen = calcularResumen(
     state.productos,
-    Object.entries(state.inventarioInicial).map(([producto_id, cantidad]) => ({ producto_id, cantidad })),
+    state.inventarioInicial,
     state.recargas,
     state.cortesias,
     state.perdidas,
-    Object.entries(state.inventarioFinal).map(([producto_id, cantidad]) => ({ producto_id, cantidad }))
+    state.descuentos,
+    state.inventarioFinal
   );
+
+  // Calcular deudas por proveedor (inventario inicial + recargas agrupados por proveedor)
+  const deudas: Record<string, number> = {};
+  // Desde inventario inicial
+  Object.entries(state.inventarioInicial).forEach(([prodId, data]) => {
+    const prod = state.productos.find(p => p.id === prodId);
+    if (!prod || !data.proveedor || !data.cantidad) return;
+    deudas[data.proveedor] = (deudas[data.proveedor] || 0) + data.cantidad * prod.costo;
+  });
+  // Desde recargas
+  state.recargas.forEach(r => {
+    const prod = state.productos.find(p => p.id === r.producto_id);
+    if (!prod || !r.proveedor) return;
+    deudas[r.proveedor] = (deudas[r.proveedor] || 0) + r.cantidad * prod.costo;
+  });
 
   const toggleDark = () => setState(s => ({ ...s, isDark: !s.isDark }));
 
@@ -175,6 +285,12 @@ export default function BarraProApp() {
             </div>
 
             <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
+                className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors bg-white/50 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm"
+              >
+                <Settings size={14} /> Base de Datos
+              </button>
               <button onClick={toggleDark} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 transition-colors">
                 {state.isDark ? <Sun size={20} /> : <Moon size={20} />}
               </button>
@@ -196,16 +312,25 @@ export default function BarraProApp() {
 
       <main className="max-w-7xl mx-auto p-6">
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-          {state.step === 'apertura' && <Apertura onContinuar={handleApertura} eventoInicial={state.evento} productosIniciales={state.productos.length > 0 ? state.productos : undefined} />}
+          {state.step === 'apertura' && <Apertura onContinuar={handleApertura} eventoInicial={state.evento} productosIniciales={state.productos.length > 0 ? state.productos : undefined} proveedoresIniciales={state.proveedores.length > 0 ? state.proveedores : undefined} invInicial={state.inventarioInicial} onAdmin={() => setState(s => ({ ...s, step: 'admin' }))} />}
+          {state.step === 'admin' && (
+            <AdminPanel onAtras={() => setState(s => ({ ...s, step: 'apertura' }))} />
+          )}
           {state.step === 'operacion' && state.evento && (
             <Operacion
               evento={state.evento} productos={state.productos}
+              proveedores={state.proveedores}
               inventarioInicial={state.inventarioInicial}
               recargas={state.recargas} cortesias={state.cortesias}
-              perdidas={state.perdidas} log={state.log}
+              perdidas={state.perdidas} 
+              descuentos={state.descuentos}
+              gastos={state.gastos}
+              log={state.log}
               onSaveInicial={handleSaveInicial}
               onAddRecarga={handleAddRecarga} onAddCortesia={handleAddCortesia}
               onAddPerdida={handleAddPerdida}
+              onAddDescuento={handleAddDescuento}
+              onAddGasto={handleAddGasto}
               onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
               onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
             />
@@ -214,7 +339,8 @@ export default function BarraProApp() {
             <Cierre
               evento={state.evento} productos={state.productos}
               inventarioInicial={state.inventarioInicial} recargas={state.recargas}
-              onGuardar={handleCierre}
+              cortesias={state.cortesias} perdidas={state.perdidas}
+              onFinalizar={handleCierre}
               onAtras={() => setState(s => ({ ...s, step: 'operacion' }))}
             />
           )}
@@ -222,8 +348,16 @@ export default function BarraProApp() {
             <Reporte 
               evento={state.evento} 
               resumen={resumen} 
+              productos={state.productos}
+              recargas={state.recargas}
+              cortesias={state.cortesias}
+              perdidas={state.perdidas}
+              descuentos={state.descuentos}
+              gastos={state.gastos}
+              invInicial={state.inventarioInicial}
               dinero={state.dinero} 
-              onNuevoEvento={() => setState(INIT)} 
+              log={state.log}
+              onNuevoEvento={() => { localStorage.removeItem(STORAGE_KEY); setState(INIT); }} 
               onAtras={() => setState(s => ({ ...s, step: 'cierre' }))}
             />
           )}

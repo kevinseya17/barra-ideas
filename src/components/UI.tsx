@@ -112,16 +112,18 @@ export const Stat: React.FC<StatProps> = ({ label, value, sub, color = 'text-sla
   </Card>
 );
 
-// ── Section header ────────────────────────────────────────────────────────────
-export const SectionHeader: React.FC<{ step: string; title: string; sub?: string; color?: string }> = ({
-  step, title, sub, color = 'text-indigo-600'
+export const SectionHeader: React.FC<{ title: string; sub?: string; step?: string; icon?: React.ReactNode }> = ({
+  title, sub, step, icon
 }) => (
-  <div className="mb-10">
-    <p className={`text-[11px] font-bold uppercase tracking-[0.2em] mb-3 ${color}`}>{step}</p>
-    <h1 className="text-5xl font-bold text-slate-900 tracking-tight">{title}</h1>
+  <div className="mb-10 mt-14">
+    {step && <p className="text-[11px] font-bold uppercase tracking-[0.2em] mb-3 text-indigo-600">{step}</p>}
+    <h2 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+      {icon && <span className="text-slate-400">{icon}</span>}
+      {title}
+    </h2>
     {sub && (
       <div className="flex items-center gap-3 mt-4">
-        <div className="w-1.5 h-8 bg-indigo-500 rounded-full" />
+        <div className="w-1 h-6 bg-indigo-500/20 rounded-full" />
         <p className="text-slate-500 font-medium text-sm leading-relaxed">{sub}</p>
       </div>
     )}

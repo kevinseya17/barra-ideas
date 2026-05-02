@@ -7,25 +7,27 @@ import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI
 interface Props {
   evento: { nombre: string; fecha: string; responsable: string };
   productos: Producto[];
-  inventarioInicial: Record<string, number>;
+  inventarioInicial: Record<string, { cantidad: number; proveedor: string }>;
   recargas: { producto_id: string; cantidad: number }[];
-  onGuardar: (inventarioFinal: Record<string, number>, dinero: { efectivo: number; datafono: number; nequi: number }) => void;
+  cortesias: { producto_id: string; cantidad: number }[];
+  perdidas: { producto_id: string; cantidad: number }[];
+  onFinalizar: (inventarioFinal: Record<string, number>, dinero: { efectivo: number; datafono: number; nequi: number }) => void;
   onAtras: () => void;
 }
 
-export default function Cierre({ evento, productos, inventarioInicial, recargas, onGuardar, onAtras }: Props) {
+export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, onFinalizar, onAtras }: Props) {
   const [fin, setFin] = useState<Record<string, string>>({});
   const [dinero, setDinero] = useState({ efectivo: '', datafono: '', nequi: '' });
 
   const disponible = (id: string) => {
-    const ini = inventarioInicial[id] ?? 0;
+    const ini = inventarioInicial[id]?.cantidad ?? 0;
     const rec = recargas.filter(r => r.producto_id === id).reduce((a, b) => a + Number(b.cantidad), 0);
     return ini + rec;
   };
 
   const guardar = () => {
     const inv = Object.fromEntries(productos.map(p => [p.id, Number(fin[p.id] || 0)]));
-    onGuardar(inv, {
+    onFinalizar(inv, {
       efectivo: Number(dinero.efectivo || 0),
       datafono: Number(dinero.datafono || 0),
       nequi: Number(dinero.nequi || 0),
