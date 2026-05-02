@@ -64,7 +64,21 @@ function loadState(): AppState {
 
 export default function BarraProApp() {
   const [state, setState] = useState<AppState>(INIT);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const stepIdx = STEPS.indexOf(state.step);
+
+  // Monitor de Conexión
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Cargar estado guardado al iniciar
   useEffect(() => {
@@ -167,7 +181,9 @@ export default function BarraProApp() {
       log: [logEntry, ...s.log]
     }));
     
-    api.createRecarga(localRec);
+    setIsSyncing(true);
+    await api.createRecarga(localRec);
+    setIsSyncing(false);
   };
 
   const handleAddCortesia = async (c: any) => {
@@ -183,7 +199,9 @@ export default function BarraProApp() {
       log: [logEntry, ...s.log]
     }));
     
-    api.createCortesia(localCor);
+    setIsSyncing(true);
+    await api.createCortesia(localCor);
+    setIsSyncing(false);
   };
 
   const handleAddPerdida = async (p: any) => {
@@ -199,7 +217,9 @@ export default function BarraProApp() {
       log: [logEntry, ...s.log]
     }));
     
-    api.createPerdida(localPer);
+    setIsSyncing(true);
+    await api.createPerdida(localPer);
+    setIsSyncing(false);
   };
 
   const handleAddDescuento = async (d: any) => {
@@ -215,7 +235,9 @@ export default function BarraProApp() {
       log: [logEntry, ...s.log]
     }));
     
-    api.createDescuento(localDesc);
+    setIsSyncing(true);
+    await api.createDescuento(localDesc);
+    setIsSyncing(false);
   };
 
   const handleAddGasto = async (g: any) => {
@@ -231,7 +253,9 @@ export default function BarraProApp() {
       log: [logEntry, ...s.log]
     }));
     
-    api.createGasto(localGasto);
+    setIsSyncing(true);
+    await api.createGasto(localGasto);
+    setIsSyncing(false);
   };
 
   const handleRemoveLogEntry = async (logId: string) => {
@@ -360,6 +384,36 @@ export default function BarraProApp() {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* INDICADOR DE NUBE */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+                !isOnline ? 'bg-rose-50 border-rose-200 text-rose-500 animate-pulse' :
+                isSyncing ? 'bg-amber-50 border-amber-200 text-amber-500' :
+                'bg-emerald-50 border-emerald-200 text-emerald-500'
+              }`}>
+                {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : 
+                 !isOnline ? <AlertTriangle size={14} /> : 
+                 <BarChart3 size={14} />}
+                <span className="text-[10px] font-black uppercase tracking-tighter">
+                  {!isOnline ? 'Sin Conexión' : isSyncing ? 'Sincronizando' : 'Nube Segura'}
+                </span>
+              </div>
+
+              <button 
+                onClick={() => {
+                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+                  const downloadAnchorNode = document.createElement('a');
+                  downloadAnchorNode.setAttribute("href", dataStr);
+                  downloadAnchorNode.setAttribute("download", `backup_barrapro_${state.evento?.nombre || 'evento'}_${new Date().toISOString().split('T')[0]}.json`);
+                  document.body.appendChild(downloadAnchorNode);
+                  downloadAnchorNode.click();
+                  downloadAnchorNode.remove();
+                }} 
+                className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors bg-white/50 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm"
+                title="Descargar copia de seguridad"
+              >
+                <PackageOpen size={14} /> Backup
+              </button>
+
               <button 
                 onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
                 className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors bg-white/50 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm"
