@@ -67,14 +67,20 @@ export default function Operacion({
   const [ticket, setTicket] = useState<LogEntry | null>(null);
 
   // --- CÁLCULOS EN VIVO ---
+  const totalPotencial = productos.reduce((acc, p) => {
+    const ini = inventarioInicial[p.id]?.cantidad || 0;
+    const recs = recargas.filter(r => r.producto_id === p.id).reduce((sum, r) => sum + Number(r.cantidad), 0);
+    return acc + ((ini + recs) * (p.precio_venta || 0));
+  }, 0);
+
   const totalGastos = gastos.reduce((a, b) => a + Number(b.monto), 0);
   const totalRecargas = recargas.reduce((a, b) => {
     const p = productos.find(x => x.id === b.producto_id);
-    return a + (Number(b.cantidad) * (p?.costo || 0));
+    return a + (Number(b.cantidad) * (p?.precio_venta || 0));
   }, 0);
   const totalCortesias = cortesias.reduce((a, b) => {
     const p = productos.find(x => x.id === b.producto_id);
-    return a + (Number(b.cantidad) * (p?.costo || 0));
+    return a + (Number(b.cantidad) * (p?.precio_venta || 0));
   }, 0);
   const totalPerdidas = perdidas.reduce((a, b) => a + Number(b.cantidad), 0);
 
@@ -166,9 +172,9 @@ export default function Operacion({
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
             <div className="bg-emerald-600 rounded-3xl p-4 shadow-lg shadow-emerald-100 border border-emerald-500 transition-all hover:scale-[1.02]">
               <div className="flex items-center gap-2 mb-1">
-                <p className="text-[9px] font-black text-emerald-100 uppercase tracking-widest">Ventas (Est.)</p>
+                <p className="text-[9px] font-black text-emerald-100 uppercase tracking-widest">Potencial Venta</p>
               </div>
-              <p className="text-xl font-black text-white tracking-tight">${ventasProyectadas.toLocaleString('es-CO')}</p>
+              <p className="text-xl font-black text-white tracking-tight">${totalPotencial.toLocaleString('es-CO')}</p>
             </div>
 
             <div className="bg-slate-900 rounded-3xl p-4 shadow-lg border border-slate-800 transition-all hover:scale-[1.02]">
