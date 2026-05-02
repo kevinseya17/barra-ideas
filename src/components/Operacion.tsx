@@ -90,6 +90,7 @@ export default function Operacion({
     return a + (Number(b.cantidad) * (p?.precio || 0));
   }, 0);
   const totalPerdidas = perdidas.reduce((a, b) => a + Number(b.cantidad), 0);
+  const totalDescontado = descuentos.reduce((a, b) => a + Number(b.valor_descontado || 0), 0);
 
   // --- CÁLCULO DE VENTAS PROYECTADAS ---
   const ventasProyectadas = productos.reduce((acc, p) => {
@@ -176,7 +177,7 @@ export default function Operacion({
           />
 
           {/* MONITOR EN VIVO - COMPACTO Y ELEGANTE */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
             <div className="bg-emerald-600 rounded-3xl p-4 shadow-lg shadow-emerald-100 border border-emerald-500 transition-all hover:scale-[1.02]">
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-[9px] font-black text-emerald-100 uppercase tracking-widest">Potencial Venta</p>
@@ -203,6 +204,13 @@ export default function Operacion({
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cortesías</p>
               </div>
               <p className="text-xl font-black text-slate-900 tracking-tight">${totalCortesias.toLocaleString('es-CO')}</p>
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 transition-all hover:scale-[1.02] hover:shadow-md">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Descuentos</p>
+              </div>
+              <p className="text-xl font-black text-blue-600 tracking-tight">${totalDescontado.toLocaleString('es-CO')}</p>
             </div>
 
             <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 transition-all hover:scale-[1.02] hover:shadow-md">
