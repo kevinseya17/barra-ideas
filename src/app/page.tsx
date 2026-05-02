@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Evento, Gasto, Descuento } from '@/types';
 import { uid, nowTime, calcularResumen } from '@/utils/calculos';
 import * as api from '@/lib/api';
-import { Moon, Sun, Settings } from 'lucide-react';
+import { Moon, Sun, Settings, BarChart3, RefreshCw, AlertTriangle, PackageOpen } from 'lucide-react';
 import Apertura from '@/components/Apertura';
 import Operacion from '@/components/Operacion';
 import Cierre from '@/components/Cierre';
