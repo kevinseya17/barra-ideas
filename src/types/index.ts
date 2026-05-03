@@ -5,6 +5,7 @@ export interface Producto {
   unidad: 'botella' | 'unidad' | 'caja' | 'lata';
   costo: number;
   precio: number;
+  activo?: boolean;
 }
 
 export interface Evento {

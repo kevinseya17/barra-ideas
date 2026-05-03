@@ -49,12 +49,14 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
 
   useEffect(() => {
     const init = async () => {
+      let data = [];
       if (productosIniciales) {
-        setCargando(false);
+        data = productosIniciales;
       } else {
-        const data = await api.getProductos();
-        setProductos(data);
+        data = await api.getProductos();
       }
+      // Solo mostramos productos activos
+      setProductos(data.filter(p => p.activo !== false));
       
       const provs = await api.getProveedores();
       if (provs.length > 0) {
@@ -90,7 +92,12 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
 
   const agregarProducto = async () => {
     if (!nuevo.nombre.trim()) return;
-    const prodGuardado = await api.createProducto({ ...nuevo, costo: Number(nuevo.costo), precio: Number(nuevo.precio) });
+    const prodGuardado = await api.createProducto({ 
+      ...nuevo, 
+      costo: Number(nuevo.costo), 
+      precio: Number(nuevo.precio),
+      activo: true 
+    });
     if (prodGuardado) {
       setProductos(p => [...p, prodGuardado]);
       setNuevo(prodVacio());
@@ -104,7 +111,13 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
     if (ok) {
       setProductos(p => p.filter(x => x.id !== id));
     } else {
-      alert("Error al eliminar el producto");
+      // Si no se puede borrar por historial, lo desactivamos
+      const updateOk = await api.updateRecord('productos', id, { activo: false });
+      if (updateOk) {
+        setProductos(p => p.filter(x => x.id !== id));
+      } else {
+        alert("El producto tiene historial y no se pudo ocultar. Asegúrate de haber creado la columna 'activo' en Supabase.");
+      }
     }
   };
 
