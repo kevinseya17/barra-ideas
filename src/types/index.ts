@@ -95,6 +95,7 @@ export interface ResumenProducto extends Producto {
   vendido: number;
   ingresoEsperado: number;
   costoCortesias: number;
+  proveedor: string;
 }
 
 export interface LogEntry {
