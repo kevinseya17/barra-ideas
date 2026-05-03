@@ -780,32 +780,31 @@ export default function Operacion({
                   {/* Si tiene metadata de producto, mostrar detalle completo */}
                   {prod ? (
                     <>
-                      {/* Producto */}
-                      <div className="border-2 border-dashed border-slate-100 rounded-2xl p-5 mb-6">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3">Detalle del Producto</p>
-                        <div className="flex justify-between items-end mb-4">
-                          <div>
-                            <p className="text-lg font-black text-slate-900">{prod.nombre}</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">{prod.categoria} · {prod.unidad}</p>
-                          </div>
+                      {/* Cabezal de Producto (NUEVO DISEÑO PRO) */}
+                      <div className="bg-slate-900 rounded-[1.5rem] p-6 mb-6 text-white shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+                        <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-2">Producto Registrado</p>
+                        <h4 className="text-3xl font-black uppercase tracking-tighter leading-none mb-2">{prod.nombre}</h4>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-widest">{prod.categoria} · {prod.unidad}</p>
                           <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Cantidad</p>
-                            <p className="text-4xl font-black text-indigo-600 leading-none">{cantidad}</p>
-                            <p className="text-[10px] text-slate-400 font-bold">{prod.unidad}(s)</p>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
-                          <div className="bg-slate-50 rounded-xl p-3 text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Precio Venta</p>
-                            <p className="text-sm font-black text-slate-700">${prod.precio.toLocaleString('es-CO')}</p>
-                          </div>
-                          <div className="bg-slate-50 rounded-xl p-3 text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Costo Unitario</p>
-                            <p className="text-sm font-black text-slate-700">${prod.costo.toLocaleString('es-CO')}</p>
+                            <p className="text-[24px] font-black text-white leading-none tracking-tighter">{cantidad} <span className="text-[10px] opacity-50 uppercase">{prod.unidad}(s)</span></p>
                           </div>
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Precio Venta</p>
+                          <p className="text-lg font-black text-slate-900">${prod.precio.toLocaleString('es-CO')}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Costo Unidad</p>
+                          <p className="text-lg font-black text-slate-900">${prod.costo.toLocaleString('es-CO')}</p>
+                        </div>
+                      </div>
+                    </>
+                  ) : ticket.msg.includes('Inventario inicial') && ticket.metadata ? (
 
                       {/* Campos Específicos por Tipo */}
                       <div className="bg-slate-50 rounded-2xl p-4 mb-6 space-y-3">

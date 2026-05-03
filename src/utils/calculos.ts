@@ -72,6 +72,7 @@ export const calcularResumen = (
     // Manejar ambos formatos de inventario inicial (con o sin proveedor)
     const rawIni = inventarioInicial[p.id];
     const ini = typeof rawIni === 'object' ? rawIni.cantidad : (rawIni ?? 0);
+    const proveedor = typeof rawIni === 'object' ? rawIni.proveedor : '-';
     
     const rec = recargas
       .filter((x) => x.producto_id === p.id)
@@ -113,6 +114,7 @@ export const calcularResumen = (
       vendido,
       ingresoEsperado,
       costoCortesias: cor * p.costo,
+      proveedor
     };
   });
 };
@@ -175,7 +177,7 @@ export const exportarExcel = async (
   ws.addRow(['Evento:', nombreEvento, '', 'Fecha:', fecha]);
   ws.addRow([]);
 
-  const tableHeader = ['PRODUCTO', 'PRESENTACIÓN', 'PRECIO', 'INICIAL', 'RECARGAS', 'CORTESÍAS', 'DESC.', 'BAJAS', 'FINAL', 'VENDIDO', 'INGRESO BRUTO', '', 'COSTO UNIT', 'COSTO TOTAL'];
+  const tableHeader = ['PRODUCTO', 'PRESENTACIÓN', 'PRECIO', 'INICIAL', 'RECARGAS', 'CORTESÍAS', 'DESC.', 'BAJAS', 'FINAL', 'VENDIDO', 'INGRESO BRUTO', '', 'COSTO UNIT', 'COSTO TOTAL', 'PROVEEDOR'];
   const headerRow = ws.addRow(tableHeader);
   headerStyle(ws, headerRow.number, tableHeader.length);
 
@@ -187,8 +189,9 @@ export const exportarExcel = async (
     
     const prods = resumen.filter(p => p.categoria === cat);
     prods.forEach(p => {
+      // Intentar obtener el proveedor del inventario inicial o de la primera recarga
       ws.addRow([
-        p.nombre, p.unidad, p.precio, p.ini, p.rec, p.cor, p.desc || 0, p.per, p.fin, p.vendido, p.ingresoEsperado, '', p.costo, p.vendido * p.costo,
+        p.nombre, p.unidad, p.precio, p.ini, p.rec, p.cor, p.desc || 0, p.per, p.fin, p.vendido, p.ingresoEsperado, '', p.costo, p.vendido * p.costo, p.proveedor || '-',
       ]);
     });
   });
