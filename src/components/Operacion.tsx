@@ -769,7 +769,6 @@ export default function Operacion({
                     </span>
                   </div>
 
-                  {/* Datos del Evento */}
                   <div className="bg-slate-50 rounded-2xl p-4 mb-6 space-y-2 text-[11px]">
                     <div className="flex justify-between"><span className="text-slate-400 font-bold">Evento:</span><span className="font-black text-slate-900">{evento.nombre}</span></div>
                     <div className="flex justify-between"><span className="text-slate-400 font-bold">Responsable:</span><span className="font-bold text-slate-800">{evento.responsable}</span></div>
@@ -777,10 +776,8 @@ export default function Operacion({
                     <div className="flex justify-between"><span className="text-slate-400 font-bold">Hora:</span><span className="font-bold text-slate-800">{ticket.time}</span></div>
                   </div>
 
-                  {/* Si tiene metadata de producto, mostrar detalle completo */}
                   {prod ? (
                     <>
-                      {/* Cabezal de Producto (NUEVO DISEÑO PRO) */}
                       <div className="bg-slate-900 rounded-[1.5rem] p-6 mb-6 text-white shadow-xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
                         <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-2">Producto Registrado</p>
@@ -793,20 +790,6 @@ export default function Operacion({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Precio Venta</p>
-                          <p className="text-lg font-black text-slate-900">${prod.precio.toLocaleString('es-CO')}</p>
-                        </div>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Costo Unidad</p>
-                          <p className="text-lg font-black text-slate-900">${prod.costo.toLocaleString('es-CO')}</p>
-                        </div>
-                      </div>
-                    </>
-                  ) : ticket.msg.includes('Inventario inicial') && ticket.metadata ? (
-
-                      {/* Campos Específicos por Tipo */}
                       <div className="bg-slate-50 rounded-2xl p-4 mb-6 space-y-3">
                         {ticket.tipo === 'recarga' && (
                           <>
@@ -815,10 +798,9 @@ export default function Operacion({
                               <span className="font-black text-indigo-700 uppercase">{ticket.metadata?.proveedor || 'No especificado'}</span>
                             </div>
                             <div className="flex justify-between text-[11px] pt-2 border-t border-slate-200">
-                              <span className="text-slate-400 font-bold">Subtotal Costo ({cantidad} × ${prod.costo.toLocaleString('es-CO')}):</span>
+                              <span className="text-slate-400 font-bold">Subtotal Costo:</span>
                               <span className="font-black text-slate-900">${subtotalCosto.toLocaleString('es-CO')}</span>
                             </div>
-                            <p className="text-[9px] text-slate-400 italic mt-1">* Este monto se suma a la cuenta por pagar del proveedor</p>
                           </>
                         )}
 
@@ -830,58 +812,29 @@ export default function Operacion({
                             </div>
                             {ticket.metadata?.motivo && (
                               <div className="pt-2 border-t border-slate-200">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Motivo / Justificación:</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Motivo:</p>
                                 <p className="text-[11px] font-bold text-slate-800 italic">&ldquo;{ticket.metadata.motivo}&rdquo;</p>
                               </div>
                             )}
-                            <div className="pt-2 border-t border-slate-200 space-y-1">
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-400 font-bold">Valor Comercial Perdido:</span>
-                                <span className="font-black text-amber-600">${subtotalPrecio.toLocaleString('es-CO')}</span>
-                              </div>
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-400 font-bold">Costo Real Asumido:</span>
-                                <span className="font-black text-slate-900">${subtotalCosto.toLocaleString('es-CO')}</span>
-                              </div>
-                            </div>
                           </>
                         )}
 
                         {ticket.tipo === 'perdida' && (
-                          <>
-                            <div className="pt-1">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Razón de la Baja:</p>
-                              <p className="text-[11px] font-bold text-rose-600 italic">&ldquo;{ticket.metadata?.motivo || 'Sin especificar'}&rdquo;</p>
-                            </div>
-                            <div className="pt-2 border-t border-slate-200 space-y-1">
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-400 font-bold">Ingreso No Percibido:</span>
-                                <span className="font-black text-rose-500">${subtotalPrecio.toLocaleString('es-CO')}</span>
-                              </div>
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-400 font-bold">Pérdida en Costo:</span>
-                                <span className="font-black text-slate-900">${subtotalCosto.toLocaleString('es-CO')}</span>
-                              </div>
-                            </div>
-                          </>
+                          <div className="pt-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Razón de la Baja:</p>
+                            <p className="text-[11px] font-bold text-rose-600 italic">&ldquo;{ticket.metadata?.motivo || 'Sin especificar'}&rdquo;</p>
+                          </div>
                         )}
+
                         {ticket.tipo === 'descuento' && (
                           <>
                             <div className="flex justify-between text-[11px]">
-                              <span className="text-slate-400 font-bold">Porcentaje Aplicado:</span>
-                              <span className="font-black text-blue-600">-{ticket.metadata?.porcentaje}%</span>
-                            </div>
-                            <div className="flex justify-between text-[11px] pt-1">
-                              <span className="text-slate-400 font-bold">Valor Descontado (Ahorro):</span>
+                              <span className="text-slate-400 font-bold">Ahorro:</span>
                               <span className="font-black text-blue-600">-${Number(ticket.metadata?.valor_descontado).toLocaleString('es-CO')}</span>
                             </div>
-                            <div className="pt-2 border-t border-slate-200">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Motivo / Cliente:</p>
-                              <p className="text-[11px] font-bold text-slate-800 italic">&ldquo;{ticket.metadata?.motivo || 'Promoción de evento'}&rdquo;</p>
-                            </div>
                             <div className="pt-2 border-t border-slate-900 flex justify-between items-center">
-                              <span className="text-[10px] font-black uppercase text-slate-900">Precio Final Cobrado:</span>
-                              <span className="text-sm font-black text-slate-900">
+                              <span className="text-[10px] font-black uppercase text-slate-900">Final Cobrado:</span>
+                              <span className="text-lg font-black text-slate-900">
                                 ${((prod.precio * (ticket.metadata?.cantidad || 1)) - (ticket.metadata?.valor_descontado || 0)).toLocaleString('es-CO')}
                               </span>
                             </div>
@@ -890,7 +843,6 @@ export default function Operacion({
                       </div>
                     </>
                   ) : ticket.msg.includes('Inventario inicial') && ticket.metadata ? (
-                    /* ACTA DE INVENTARIO COMPLETA */
                     <div className="mb-6">
                       <div className="border-b-2 border-slate-900 pb-2 mb-4">
                         <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Lista de Carga Inicial</p>
@@ -917,44 +869,42 @@ export default function Operacion({
                       </div>
                     </div>
                   ) : (
-                    /* Log genérico sin producto */
                     <div className="border-2 border-dashed border-slate-100 rounded-2xl p-5 mb-6">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3">Descripción</p>
-                      <p className="text-sm font-bold text-slate-800 leading-relaxed">{ticket.msg}</p>
+                      <p className="text-sm font-bold text-slate-600 text-center">{ticket.msg}</p>
                     </div>
                   )}
 
-                  {/* Firmas */}
-                  <div className="grid grid-cols-2 gap-8 pt-8 mt-4">
+                  <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-100">
                     <div className="text-center">
-                      <div className="w-full h-px bg-slate-300 mb-2 mt-10" />
-                      <p className="text-[9px] font-bold text-slate-500 uppercase">Firma Responsable</p>
-                      <p className="text-[8px] text-slate-300 font-bold mt-0.5">({evento.responsable})</p>
+                      <div className="h-10 border-b border-slate-300 mb-2 mx-auto w-3/4"></div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase">Firma Responsable</p>
+                      <p className="text-[10px] font-bold text-slate-800 mt-1">({evento.responsable})</p>
                     </div>
                     <div className="text-center">
-                      <div className="w-full h-px bg-slate-300 mb-2 mt-10" />
-                      <p className="text-[9px] font-bold text-slate-500 uppercase">{ticket.tipo === 'recarga' ? 'Firma Proveedor' : ticket.tipo === 'cortesia' ? 'Firma Beneficiario' : 'Firma Testigo'}</p>
-                      <p className="text-[8px] text-slate-300 font-bold mt-0.5">({ticket.tipo === 'recarga' ? (ticket.metadata?.proveedor || 'Proveedor') : ticket.tipo === 'cortesia' ? (ticket.metadata?.persona || 'Beneficiario') : 'Testigo'})</p>
+                      <div className="h-10 border-b border-slate-300 mb-2 mx-auto w-3/4"></div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase">Firma Testigo</p>
+                      <p className="text-[10px] font-bold text-slate-800 mt-1">(Testigo)</p>
                     </div>
                   </div>
 
-                  {/* Footer */}
-                  <div className="mt-8 pt-4 border-t border-dashed border-slate-200 text-center">
-                    <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">ID: {ticket.id}</p>
+                  <div className="mt-8 text-center">
+                    <p className="text-[9px] font-bold text-slate-300 uppercase tracking-[0.3em]">ID: {ticket.id.slice(0, 8)}</p>
                   </div>
                 </div>
               );
             })()}
 
-            {/* Action Buttons (Non-printable) */}
-            <div className="p-6 bg-slate-50 flex gap-3 no-print">
+            <div className="bg-slate-50 p-4 flex gap-3 no-print">
               <Btn variant="indigo" className="flex-1" onClick={() => window.print()} icon={<Printer size={16} />}>
                 Imprimir Vale
               </Btn>
+              <Btn variant="ghost" onClick={() => setTicket(null)}>Cerrar</Btn>
             </div>
           </div>
-          
-          <style jsx global>{`
+        </div>
+      )}
+
+      <style jsx global>{`
             @media print {
               .no-print { display: none !important; }
               body * { visibility: hidden; }
@@ -967,8 +917,6 @@ export default function Operacion({
               }
             }
           `}</style>
-        </div>
-      )}
     </div>
   );
 }
