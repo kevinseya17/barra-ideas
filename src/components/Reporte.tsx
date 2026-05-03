@@ -36,24 +36,16 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
 
   const doExport = () => exportarExcel(resumen, productos, evento.nombre, evento.fecha, dinero.efectivo, dinero.datafono, dinero.nequi, evento.caja_inicial || 0, deudas, log, gastos, recargas, cortesias, perdidas, descuentos);
 
-  // Cálculo de Cuentas por Pagar por Proveedor
+  // Cálculo de Cuentas por Pagar por Proveedor (Consumo Real)
   const deudas: Record<string, number> = {};
   
-  // 1. Sumar Inventario Inicial
-  Object.entries(invInicial).forEach(([prodId, data]) => {
-    const p = resumen.find(x => x.id === prodId);
-    if (p && data.proveedor) {
-      const subtotal = data.cantidad * p.costo;
-      deudas[data.proveedor] = (deudas[data.proveedor] || 0) + subtotal;
-    }
-  });
-
-  // 2. Sumar Recargas
-  recargas.forEach(r => {
-    const p = resumen.find(x => x.id === r.producto_id);
-    if (p && r.proveedor) {
-      const subtotal = r.cantidad * p.costo;
-      deudas[r.proveedor] = (deudas[r.proveedor] || 0) + subtotal;
+  // 1. Sumar Entradas (Inicial + Recargas) y Restar Final
+  resumen.forEach(p => {
+    if (p.proveedor && p.proveedor !== '-') {
+      // Deuda = (Consumo) * Costo
+      // Consumo ya es (ini + rec - fin)
+      const subtotal = p.consumo * p.costo;
+      deudas[p.proveedor] = (deudas[p.proveedor] || 0) + subtotal;
     }
   });
 

@@ -191,9 +191,9 @@ export const exportarExcel = async (
     
     const prods = resumen.filter(p => p.categoria === cat);
     prods.forEach(p => {
-      // Intentar obtener el proveedor del inventario inicial o de la primera recarga
       ws.addRow([
-        p.nombre, p.unidad, p.precio, p.ini, p.rec, p.cor, p.desc || 0, p.per, p.fin, p.vendido, p.ingresoEsperado, '', p.costo, p.vendido * p.costo, p.proveedor || '-',
+        p.nombre, p.unidad, p.precio, p.ini, p.rec, p.cor, p.desc || 0, p.per, p.fin, p.vendido, 
+        p.ingresoEsperado, '', p.costo, p.consumo * p.costo, p.proveedor || '-',
       ]);
     });
   });
@@ -263,14 +263,16 @@ export const exportarExcel = async (
   wsp.addRow([]);
 
   // Consolidar datos por proveedor
-  const provDetails: Record<string, Record<string, { ini: number, rec: number, costo: number, nombre: string }>> = {};
+  const provDetails: Record<string, Record<string, { ini: number, rec: number, fin: number, consumo: number, costo: number, nombre: string }>> = {};
   
-  // 1. Del Inventario Inicial
+  // 1. Del Inventario Inicial y Resumen
   resumen.forEach(p => {
     if (p.proveedor && p.proveedor !== '-') {
       if (!provDetails[p.proveedor]) provDetails[p.proveedor] = {};
-      if (!provDetails[p.proveedor][p.id]) provDetails[p.proveedor][p.id] = { ini: 0, rec: 0, costo: p.costo, nombre: p.nombre };
+      if (!provDetails[p.proveedor][p.id]) provDetails[p.proveedor][p.id] = { ini: 0, rec: 0, fin: 0, consumo: 0, costo: p.costo, nombre: p.nombre };
       provDetails[p.proveedor][p.id].ini = p.ini;
+      provDetails[p.proveedor][p.id].fin = p.fin;
+      provDetails[p.proveedor][p.id].consumo = p.consumo;
     }
   });
 
@@ -278,10 +280,11 @@ export const exportarExcel = async (
   recargas.forEach(r => {
     if (r.proveedor && r.proveedor !== '-') {
       if (!provDetails[r.proveedor]) provDetails[r.proveedor] = {};
-      const p = productos.find(x => x.id === r.producto_id);
+      const p = resumen.find(x => x.id === r.producto_id);
       if (p) {
-        if (!provDetails[r.proveedor][r.producto_id]) provDetails[r.proveedor][r.producto_id] = { ini: 0, rec: 0, costo: p.costo, nombre: p.nombre };
+        if (!provDetails[r.proveedor][r.producto_id]) provDetails[r.proveedor][r.producto_id] = { ini: 0, rec: 0, fin: 0, consumo: 0, costo: p.costo, nombre: p.nombre };
         provDetails[r.proveedor][r.producto_id].rec += r.cantidad;
+        // El consumo se recalcula automáticamente si viene del resumen
       }
     }
   });
@@ -292,25 +295,24 @@ export const exportarExcel = async (
     titleRow.font = { bold: true, size: 12 };
     titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
 
-    const pHeader = ['PRODUCTO', 'STOCK INICIAL', 'RECARGAS', 'TOTAL UNDS', 'COSTO UNIT', 'VALOR A PAGAR'];
+    const pHeader = ['PRODUCTO', 'STOCK INICIAL', 'RECARGAS', 'STOCK FINAL', 'CONSUMO TOTAL', 'COSTO UNIT', 'VALOR A PAGAR'];
     const phRow = wsp.addRow(pHeader);
     headerStyle(wsp, phRow.number, pHeader.length);
 
     let totalProv = 0;
     Object.values(items).forEach(item => {
-      const totalUnds = item.ini + item.rec;
-      const subtotal = totalUnds * item.costo;
-      if (totalUnds > 0) {
+      const subtotal = item.consumo * item.costo;
+      if (item.ini + item.rec > 0) {
         totalProv += subtotal;
-        wsp.addRow([item.nombre, item.ini, item.rec, totalUnds, item.costo, subtotal]);
+        wsp.addRow([item.nombre, item.ini, item.rec, item.fin, item.consumo, item.costo, subtotal]);
       }
     });
 
-    const fRow = wsp.addRow(['TOTAL A LIQUIDAR CON ESTE PROVEEDOR', '', '', '', '', totalProv]);
+    const fRow = wsp.addRow(['TOTAL A PAGAR POR CONSUMO REAL', '', '', '', '', '', totalProv]);
     fRow.font = { bold: true };
-    fRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }; // Amarillo para el total
+    fRow.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }; 
     
-    wsp.addRow([]); // Espacio entre proveedores
+    wsp.addRow([]); 
   });
 
   // Ajustar anchos y bordes en Liquidación
