@@ -98,7 +98,9 @@ export const calcularResumen = (
     // El ingreso total es lo vendido full price + lo vendido con descuento (precio original - valor descontado)
     const ingresoVentaNormal = vendido * p.precio;
     const ingresoDescuentos = (desc * p.precio) - valorDescontadoTotales;
-    const ingresoEsperado = ingresoVentaNormal + ingresoDescuentos;
+    
+    // Si no hubo consumo real (Disp - Fin <= 0), el ingreso debe ser 0.
+    const ingresoEsperado = consumo > 0 ? (ingresoVentaNormal + ingresoDescuentos) : 0;
 
     return {
       ...p,

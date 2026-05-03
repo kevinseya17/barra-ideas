@@ -470,6 +470,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
                   <th className="text-center py-4 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Disp.</th>
                   <th className="text-center py-4 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Final</th>
                   <th className="text-center py-4 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap text-amber-500">Cort.</th>
+                  <th className="text-center py-4 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap text-indigo-500">Desc.</th>
                   <th className="text-center py-4 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap text-rose-500">Pérd.</th>
                   <th className="text-center py-4 px-2 text-[10px] font-bold text-slate-900 uppercase tracking-widest whitespace-nowrap bg-slate-50 rounded-t-lg">Vendido</th>
                   <th className="text-right py-4 px-2 text-[10px] font-bold text-indigo-600 uppercase tracking-widest whitespace-nowrap">Ingreso</th>
@@ -485,6 +486,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
                     <td className="py-4 px-2 text-center font-bold text-slate-500">{p.disponible}</td>
                     <td className="py-4 px-2 text-center font-bold text-slate-500">{p.fin}</td>
                     <td className="py-4 px-2 text-center font-bold text-amber-500 bg-amber-50/30">{p.cor}</td>
+                    <td className="py-4 px-2 text-center font-bold text-indigo-500 bg-indigo-50/30">{p.desc || 0}</td>
                     <td className="py-4 px-2 text-center font-bold text-rose-500 bg-rose-50/30">{p.per}</td>
                     <td className="py-4 px-2 text-center font-black text-slate-900 bg-slate-50 group-hover:bg-indigo-50 transition-colors">{p.vendido}</td>
                     <td className="py-4 px-2 text-right font-black text-indigo-600 whitespace-nowrap">{fmt(p.ingresoEsperado)}</td>
@@ -493,8 +495,8 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
               </tbody>
               <tfoot>
                 <tr className="bg-slate-900 text-white">
-                  <td colSpan={6} className="py-4 px-4 font-bold text-right text-xs uppercase tracking-[0.2em] rounded-bl-3xl">Gran Total Ingreso Esperado</td>
-                  <td className="py-4 px-4 font-black text-right text-lg rounded-br-3xl">{fmt(totalEsperado)}</td>
+                  <td colSpan={6} className="py-4 px-4 font-bold text-right text-xs uppercase tracking-[0.2em] rounded-bl-3xl">Total Ingreso por Ventas</td>
+                  <td className="py-4 px-4 font-black text-right text-lg rounded-br-3xl">{fmt(totalVentas)}</td>
                 </tr>
               </tfoot>
             </table>
