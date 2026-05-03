@@ -258,6 +258,53 @@ export default function BarraProApp() {
     setIsSyncing(false);
   };
 
+  const handleUpdateLogEntry = async (logId: string, newData: any) => {
+    const entry = state.log.find(l => l.id === logId);
+    if (!entry || !entry.metadata?.id) return;
+
+    const { id, tipo } = entry.metadata;
+    const tableMap: Record<string, string> = {
+      recarga: 'recargas',
+      cortesia: 'cortesias',
+      perdida: 'perdidas',
+      descuento: 'descuentos',
+      gasto: 'gastos'
+    };
+
+    const table = tableMap[entry.tipo];
+    if (table) {
+      await api.updateRecord(table, id, newData);
+    }
+
+    setState(s => {
+      // 1. Actualizar el array específico (recargas, gastos, etc.)
+      const updateArray = (arr: any[]) => arr.map(item => item.id === id ? { ...item, ...newData } : item);
+      
+      // 2. Re-generar el mensaje del log si es necesario
+      const updatedLog = s.log.map(l => {
+        if (l.id !== logId) return l;
+        let newMsg = l.msg;
+        if (l.tipo === 'recarga') newMsg = `➕ Recarga (Mod): ${newData.cantidad} unidades de ${pName(newData.producto_id)}`;
+        if (l.tipo === 'gasto') newMsg = `💸 Gasto (Mod): $${Number(newData.monto).toLocaleString()} por ${newData.concepto}`;
+        if (l.tipo === 'cortesia') newMsg = `🎁 Cortesía (Mod): ${newData.cantidad} de ${pName(newData.producto_id)} para ${newData.persona}`;
+        if (l.tipo === 'descuento') newMsg = `🏷️ Descuento (Mod): ${newData.cantidad} de ${pName(newData.producto_id)} al ${newData.porcentaje}% off`;
+        if (l.tipo === 'perdida') newMsg = `⚠️ Pérdida (Mod): ${newData.cantidad} de ${pName(newData.producto_id)}`;
+        
+        return { ...l, msg: newMsg, metadata: { ...l.metadata, ...newData } };
+      });
+
+      return {
+        ...s,
+        log: updatedLog,
+        recargas: entry.tipo === 'recarga' ? updateArray(s.recargas) : s.recargas,
+        cortesias: entry.tipo === 'cortesia' ? updateArray(s.cortesias) : s.cortesias,
+        perdidas: entry.tipo === 'perdida' ? updateArray(s.perdidas) : s.perdidas,
+        descuentos: entry.tipo === 'descuento' ? updateArray(s.descuentos) : s.descuentos,
+        gastos: entry.tipo === 'gasto' ? updateArray(s.gastos) : s.gastos,
+      };
+    });
+  };
+
   const handleRemoveLogEntry = async (logId: string) => {
     const entry = state.log.find(l => l.id === logId);
     if (!entry || !entry.metadata?.id) return;
@@ -467,6 +514,7 @@ export default function BarraProApp() {
               onAddDescuento={handleAddDescuento}
               onAddGasto={handleAddGasto}
               onRemoveLogEntry={handleRemoveLogEntry}
+              onUpdateLogEntry={handleUpdateLogEntry}
               onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
               onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
             />

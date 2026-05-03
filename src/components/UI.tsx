@@ -18,10 +18,11 @@ interface BtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: BtnVariant;
   size?: 'sm' | 'md' | 'lg';
   icon?: React.ReactNode;
+  full?: boolean;
 }
 
 export const Btn: React.FC<BtnProps> = ({
-  variant = 'primary', size = 'md', icon, children, className = '', ...props
+  variant = 'primary', size = 'md', icon, full, children, className = '', ...props
 }) => {
   const sizes = { 
     sm: 'px-3.5 py-2 text-xs font-bold', 
@@ -30,7 +31,7 @@ export const Btn: React.FC<BtnProps> = ({
   };
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${sizes[size]} ${variantMap[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${full ? 'w-full' : ''} ${sizes[size]} ${variantMap[variant]} ${className}`}
       {...props}
     >
       {icon && <span className="shrink-0">{icon}</span>}
@@ -49,8 +50,8 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string }> =
 );
 
 // ── Label ─────────────────────────────────────────────────────────────────────
-export const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] mb-2 ml-1">{children}</p>
+export const Label: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className = 'mb-2 ml-1' }) => (
+  <p className={`text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] ${className}`}>{children}</p>
 );
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
@@ -80,10 +81,14 @@ interface FieldProps {
   label: string;
   children: React.ReactNode;
   error?: string;
+  icon?: React.ReactNode;
 }
-export const Field: React.FC<FieldProps> = ({ label, children, error }) => (
+export const Field: React.FC<FieldProps> = ({ label, children, error, icon }) => (
   <div className="space-y-1">
-    <Label>{label}</Label>
+    <div className="flex items-center gap-1.5 mb-1.5 ml-1">
+      {icon && <span className="text-indigo-400 shrink-0">{icon}</span>}
+      <Label className="">{label}</Label>
+    </div>
     {children}
     {error && <p className="text-rose-500 text-[11px] font-bold mt-1.5 ml-1 animate-in fade-in slide-in-from-top-1">{error}</p>}
   </div>

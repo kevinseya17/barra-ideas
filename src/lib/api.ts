@@ -148,6 +148,12 @@ export async function deleteRecord(table: string, id: string): Promise<boolean> 
   return !error;
 }
 
+export async function updateRecord(table: string, id: string, data: any): Promise<boolean> {
+  const { error } = await supabase.from(table).update(data).eq('id', id);
+  if (error) console.error(`Error updating record in ${table}:`, error);
+  return !error;
+}
+
 // PROVEEDORES
 export async function getProveedores(): Promise<string[]> {
   const { data, error } = await supabase.from('proveedores').select('nombre').order('nombre');

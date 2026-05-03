@@ -144,42 +144,6 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
         />
       </div>
 
-      {/* Liquidación de Proveedores */}
-      <Card className="p-8 mb-10 border-slate-200 bg-slate-50/30">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
-            <Banknote size={20} />
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">Liquidación de Proveedores</h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Cuentas por pagar según inventario y recargas</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Object.entries(deudas).map(([prov, monto]) => (
-            <div key={prov} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Pagar a:</p>
-                <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{prov}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-black text-slate-900">{fmt(monto)}</p>
-                <Badge color="slate">Pendiente</Badge>
-              </div>
-            </div>
-          ))}
-          {Object.keys(deudas).length === 0 && (
-            <p className="text-slate-400 text-sm italic py-4">No se registraron deudas con proveedores externos.</p>
-          )}
-        </div>
-        
-        <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Total Cuentas por Pagar:</p>
-          <p className="text-2xl font-black text-slate-900">{fmt(totalDeuda)}</p>
-        </div>
-      </Card>
-
       {/* Motor de Alertas Inteligentes */}
       <Card className="p-8 mb-10 border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white">
         <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">

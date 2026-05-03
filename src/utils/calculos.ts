@@ -251,6 +251,74 @@ export const exportarExcel = async (
   if (perdidas.length > 0) createDetailSheet('Bajas', ['HORA', 'PRODUCTO', 'CANT', 'MOTIVO'], perdidas.map(p => [p.hora, pName(p.producto_id), p.cantidad, p.motivo]));
   if (descuentos.length > 0) createDetailSheet('Descuentos', ['HORA', 'PRODUCTO', 'CANT', '%', 'DESC', 'MOTIVO'], descuentos.map(d => [d.hora, pName(d.producto_id), d.cantidad, d.porcentaje, d.valor_descontado, d.motivo]));
 
+  // ═══════════════════════════════════════════
+  // PESTAÑA: LIQUIDACIÓN PROVEEDORES
+  // ═══════════════════════════════════════════
+  const wsp = workbook.addWorksheet('LIQUIDACIÓN');
+  wsp.addRow(['BARRAPRO - LIQUIDACIÓN DE CUENTAS POR PROVEEDOR']).font = { size: 14, bold: true };
+  wsp.addRow(['Evento:', nombreEvento]);
+  wsp.addRow(['Fecha:', fecha]);
+  wsp.addRow([]);
+
+  // Consolidar datos por proveedor
+  const provDetails: Record<string, Record<string, { ini: number, rec: number, costo: number, nombre: string }>> = {};
+  
+  // 1. Del Inventario Inicial
+  resumen.forEach(p => {
+    if (p.proveedor && p.proveedor !== '-') {
+      if (!provDetails[p.proveedor]) provDetails[p.proveedor] = {};
+      if (!provDetails[p.proveedor][p.id]) provDetails[p.proveedor][p.id] = { ini: 0, rec: 0, costo: p.costo, nombre: p.nombre };
+      provDetails[p.proveedor][p.id].ini = p.ini;
+    }
+  });
+
+  // 2. De las Recargas
+  recargas.forEach(r => {
+    if (r.proveedor && r.proveedor !== '-') {
+      if (!provDetails[r.proveedor]) provDetails[r.proveedor] = {};
+      const p = productos.find(x => x.id === r.producto_id);
+      if (p) {
+        if (!provDetails[r.proveedor][r.producto_id]) provDetails[r.proveedor][r.producto_id] = { ini: 0, rec: 0, costo: p.costo, nombre: p.nombre };
+        provDetails[r.proveedor][r.producto_id].rec += r.cantidad;
+      }
+    }
+  });
+
+  // Renderizar tablas por proveedor
+  Object.entries(provDetails).forEach(([provName, items]) => {
+    const titleRow = wsp.addRow([`PROVEEDOR: ${provName.toUpperCase()}`]);
+    titleRow.font = { bold: true, size: 12 };
+    titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+
+    const pHeader = ['PRODUCTO', 'STOCK INICIAL', 'RECARGAS', 'TOTAL UNDS', 'COSTO UNIT', 'VALOR A PAGAR'];
+    const phRow = wsp.addRow(pHeader);
+    headerStyle(wsp, phRow.number, pHeader.length);
+
+    let totalProv = 0;
+    Object.values(items).forEach(item => {
+      const totalUnds = item.ini + item.rec;
+      const subtotal = totalUnds * item.costo;
+      if (totalUnds > 0) {
+        totalProv += subtotal;
+        wsp.addRow([item.nombre, item.ini, item.rec, totalUnds, item.costo, subtotal]);
+      }
+    });
+
+    const fRow = wsp.addRow(['TOTAL A LIQUIDAR CON ESTE PROVEEDOR', '', '', '', '', totalProv]);
+    fRow.font = { bold: true };
+    fRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } }; // Amarillo para el total
+    
+    wsp.addRow([]); // Espacio entre proveedores
+  });
+
+  // Ajustar anchos y bordes en Liquidación
+  wsp.eachRow(row => {
+    row.eachCell(cell => {
+      if (cell.value !== null) cell.border = borderStyle;
+    });
+  });
+  wsp.columns.forEach((col, i) => { col.width = i === 0 ? 35 : 18; });
+
   // Descargar
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

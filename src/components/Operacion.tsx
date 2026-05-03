@@ -1,7 +1,7 @@
 
 'use client';
 import React, { useState } from 'react';
-import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, PackageOpen, Percent, Banknote, Trash2 } from 'lucide-react';
+import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, PackageOpen, Percent, Banknote, Trash2, Pencil, ShieldCheck } from 'lucide-react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from '@/types';
 import { uid, nowTime } from '@/utils/calculos';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
@@ -26,9 +26,12 @@ interface Props {
   onAddDescuento: (d: Omit<Descuento, 'id'>) => void;
   onAddGasto: (g: Omit<Gasto, 'id'>) => void;
   onRemoveLogEntry: (logId: string) => void;
+  onUpdateLogEntry: (logId: string, newData: any) => void;
   onCierre: () => void;
   onAtras: () => void;
 }
+
+const PIN_ADMIN = "1234";
 
 const TIPO_LOG: Record<LogEntry['tipo'], string> = {
   info: 'bg-slate-100 text-slate-500 border-slate-200',
@@ -42,7 +45,7 @@ const TIPO_LOG: Record<LogEntry['tipo'], string> = {
 
 export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
-  onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onCierre, onAtras,
+  onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onUpdateLogEntry, onCierre, onAtras,
 }: Props) {
   const [tab, setTab] = useState<Tab>('inventario');
   const [invLocal, setInvLocal] = useState<Record<string, { cantidad: string, proveedor: string }>>(() =>
@@ -65,6 +68,12 @@ export default function Operacion({
   });
   const [guardadoInv, setGuardadoInv] = useState(Object.keys(inventarioInicial).length > 0);
   const [ticket, setTicket] = useState<LogEntry | null>(null);
+
+  // --- ESTADOS DE SEGURIDAD Y EDICIÓN ---
+  const [adminAction, setAdminAction] = useState<{ type: 'delete' | 'edit', log: LogEntry } | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
 
   // --- CÁLCULOS EN VIVO ---
   const totalPotencial = productos.reduce((acc, p) => {
@@ -702,17 +711,31 @@ export default function Operacion({
                             <Printer size={12} />
                           </button>
                           {['recarga', 'cortesia', 'perdida', 'gasto', 'descuento'].includes(l.tipo) && (
-                            <button 
-                              onClick={() => {
-                                if (confirm('¿Seguro que deseas eliminar este registro? Esto afectará el inventario y las cuentas.')) {
-                                  onRemoveLogEntry(l.id);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white transition-all shadow-sm"
-                              title="Eliminar Registro"
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            <>
+                              <button 
+                                onClick={() => {
+                                  setAdminAction({ type: 'edit', log: l });
+                                  // No seteamos editData aquí para forzar la petición del PIN
+                                  setPinInput('');
+                                  setPinError(false);
+                                }}
+                                className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white transition-all shadow-sm"
+                                title="Editar Registro"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setAdminAction({ type: 'delete', log: l });
+                                  setPinInput('');
+                                  setPinError(false);
+                                }}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white transition-all shadow-sm"
+                                title="Eliminar Registro"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -724,6 +747,150 @@ export default function Operacion({
         </div>
 
       </div>
+
+
+      {/* MODAL DE SEGURIDAD (ADMIN PIN) */}
+      {adminAction && !editData && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-xs rounded-[2rem] shadow-2xl overflow-hidden p-8 text-center animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <ShieldCheck size={32} />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 mb-2">Área Restringida</h3>
+            <p className="text-sm text-slate-500 mb-8 font-bold leading-tight">
+              Ingresa el PIN de Administrador para <span className="text-indigo-600 underline underline-offset-4">{adminAction.type === 'delete' ? 'ANULAR' : 'EDITAR'}</span> este registro.
+            </p>
+            
+            <div className="space-y-4">
+              <input 
+                type="password" 
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="••••"
+                className={`w-full text-center text-3xl tracking-[1em] font-black border-2 rounded-2xl p-4 focus:ring-0 outline-none transition-all ${pinError ? 'border-rose-300 bg-rose-50 text-rose-600 animate-shake' : 'border-slate-100 bg-slate-50 focus:border-indigo-500'}`}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && pinInput === PIN_ADMIN) {
+                    if (adminAction.type === 'delete') {
+                      onRemoveLogEntry(adminAction.log.id);
+                      setAdminAction(null);
+                    } else {
+                      setEditData(adminAction.log.metadata);
+                    }
+                    setPinError(false);
+                  } else if (e.key === 'Enter') {
+                    setPinError(true);
+                  }
+                }}
+              />
+              
+              {pinError && <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest animate-in slide-in-from-top-1">PIN Incorrecto</p>}
+
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <Btn variant="ghost" full onClick={() => setAdminAction(null)}>Cancelar</Btn>
+                <Btn variant="indigo" full onClick={() => {
+                  if (pinInput === PIN_ADMIN) {
+                    if (adminAction.type === 'delete') {
+                      onRemoveLogEntry(adminAction.log.id);
+                      setAdminAction(null);
+                    } else {
+                      setEditData(adminAction.log.metadata);
+                    }
+                    setPinError(false);
+                  } else {
+                    setPinError(true);
+                  }
+                }}>Confirmar</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDICIÓN (ADMIN FORM) */}
+      {editData && adminAction?.type === 'edit' && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500 text-white flex items-center justify-center">
+                  <Pencil size={16} />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm uppercase tracking-tight">Editar {adminAction.log.tipo}</h3>
+                  <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">Corrección de Administrador</p>
+                </div>
+              </div>
+              <button onClick={() => { setEditData(null); setAdminAction(null); }} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5">
+              <Field label="Producto" icon={<Package size={16} />}>
+                <select 
+                  value={editData?.producto_id || ''} 
+                  onChange={(e) => setEditData({ ...editData, producto_id: e.target.value })}
+                  className={inputCls}
+                >
+                  {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </Field>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Cantidad" icon={<BarChart3 size={16} />}>
+                  <input 
+                    type="number" 
+                    value={editData?.cantidad || ''} 
+                    onChange={(e) => setEditData({ ...editData, cantidad: e.target.value })}
+                    className={inputCls}
+                  />
+                </Field>
+                {adminAction?.log.tipo === 'descuento' && (
+                  <Field label="Porcentaje %" icon={<Percent size={16} />}>
+                    <input 
+                      type="number" 
+                      value={editData?.porcentaje || ''} 
+                      onChange={(e) => setEditData({ ...editData, porcentaje: e.target.value })}
+                      className={inputCls}
+                    />
+                  </Field>
+                )}
+                {adminAction?.log.tipo === 'gasto' && (
+                  <Field label="Monto $" icon={<Banknote size={16} />}>
+                    <input 
+                      type="number" 
+                      value={editData?.monto || ''} 
+                      onChange={(e) => setEditData({ ...editData, monto: e.target.value })}
+                      className={inputCls}
+                    />
+                  </Field>
+                )}
+              </div>
+
+              {(adminAction?.log.tipo === 'cortesia' || adminAction?.log.tipo === 'descuento' || adminAction?.log.tipo === 'perdida') && (
+                <Field label="Persona / Motivo" icon={<Clock size={16} />}>
+                  <input 
+                    type="text" 
+                    value={editData?.persona || editData?.motivo || ''} 
+                    onChange={(e) => setEditData({ ...editData, persona: e.target.value, motivo: e.target.value })}
+                    className={inputCls}
+                    placeholder="Justificación del cambio"
+                  />
+                </Field>
+              )}
+
+              <div className="pt-4">
+                <Btn variant="indigo" full size="lg" onClick={() => {
+                  onUpdateLogEntry(adminAction.log.id, editData);
+                  setEditData(null);
+                  setAdminAction(null);
+                }}>Guardar Cambios</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TICKET MODAL (PRINTABLE) */}
       {ticket && (
@@ -762,10 +929,10 @@ export default function Operacion({
                       ticket.tipo === 'perdida' ? 'bg-rose-100 text-rose-700' :
                       'bg-slate-100 text-slate-700'
                     }`}>
-                      {ticket.tipo === 'recarga' ? '📦 ACTA DE RECARGA' :
-                       ticket.tipo === 'cortesia' ? '🎁 VALE DE CORTESÍA' :
-                       ticket.tipo === 'perdida' ? '⚠️ REPORTE DE BAJA' :
-                       '📋 REGISTRO DE OPERACIÓN'}
+                      {ticket.tipo === 'recarga' ? 'ACTA DE RECARGA' :
+                       ticket.tipo === 'cortesia' ? 'VALE DE CORTESÍA' :
+                       ticket.tipo === 'perdida' ? 'REPORTE DE BAJA' :
+                       'REGISTRO DE OPERACIÓN'}
                     </span>
                   </div>
 
