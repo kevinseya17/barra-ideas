@@ -5,7 +5,7 @@ import { Producto, Evento, InventarioItem, Recarga, Cortesia, Perdida, CierreDin
 export async function getProductos(): Promise<Producto[]> {
   const { data, error } = await supabase.from('productos').select('*').order('nombre');
   if (error) {
-    console.error('Error fetching productos:', error);
+    console.error('Error fetching productos:', error.message, error.code);
     return [];
   }
   return data || [];
@@ -35,7 +35,7 @@ export async function deleteProducto(id: string): Promise<boolean> {
 export async function getEventos(): Promise<Evento[]> {
   const { data, error } = await supabase.from('eventos').select('*').order('created_at', { ascending: false });
   if (error) {
-    console.error('Error fetching eventos:', error);
+    console.error('Error fetching eventos:', error.message, error.code);
     return [];
   }
   return data;
