@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, PackageOpen, Settings, LayoutGrid, List, ChevronDown, RefreshCw } from 'lucide-react';
-import { Producto } from '@/types';
+import { Producto, Evento } from '@/types';
 import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
 
@@ -47,7 +47,7 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
   });
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
-  const [eventosPasados, setEventosPasados] = useState<api.Evento[]>([]);
+  const [eventosPasados, setEventosPasados] = useState<Evento[]>([]);
   const [cargandoPrevio, setCargandoPrevio] = useState(false);
 
   useEffect(() => {
