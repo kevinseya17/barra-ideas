@@ -322,7 +322,7 @@ export default function Operacion({
                 <div className="space-y-6 mb-10">
                   {Object.entries(
                     productos.reduce((acc, p) => {
-                      const cat = p.category || p.categoria || 'Otros';
+                      const cat = p.categoria || 'Otros';
                       if (!acc[cat]) acc[cat] = [];
                       acc[cat].push(p);
                       return acc;
