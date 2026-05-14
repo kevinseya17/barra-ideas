@@ -42,9 +42,17 @@ export async function getEventos(): Promise<Evento[]> {
 }
 
 export async function getEventoActivo(): Promise<Evento | null> {
-  const { data, error } = await supabase.from('eventos').select('*').eq('estado', 'abierto').order('created_at', { ascending: false }).limit(1).maybeSingle();
-  if (error) return null;
-  return data;
+  try {
+    const { data, error } = await supabase.from('eventos').select('*').eq('estado', 'abierto').order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (error) {
+      console.error('Error fetching active event:', error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error('Network error fetching active event (Failed to fetch?):', err);
+    return null;
+  }
 }
 
 export async function getEventoData(eventoId: string) {
@@ -98,11 +106,34 @@ export async function deleteEventoCascade(id: string): Promise<boolean> {
 // INVENTARIO
 export async function saveInventarioBatch(items: Omit<InventarioItem, 'id'>[]): Promise<boolean> {
   if (items.length === 0) return true;
-  const { error } = await supabase.from('inventario_items').insert(items);
-  if (error) {
-    console.error('Error saving inventario:', error.message || error);
+  
+  console.log(`💾 Guardando ${items.length} items de inventario...`);
+  
+  try {
+    const { evento_id, tipo } = items[0];
+    const prodIds = items.map(i => i.producto_id);
+
+    // 1. Limpiar registros previos del mismo tipo para este evento (Simulando upsert)
+    await supabase.from('inventario_items')
+      .delete()
+      .eq('evento_id', evento_id)
+      .eq('tipo', tipo)
+      .in('producto_id', prodIds);
+
+    // 2. Insertar los nuevos
+    const { error } = await supabase.from('inventario_items').insert(items);
+
+    if (error) {
+      console.error('❌ Error de Supabase al guardar inventario:', JSON.stringify(error, null, 2));
+      return false;
+    }
+    
+    console.log('✅ Inventario guardado con éxito');
+    return true;
+  } catch (err: any) {
+    console.error('🔥 Error crítico al guardar inventario:', err.message || err);
+    return false;
   }
-  return !error;
 }
 
 // OPERACIONES (Ahora aceptamos el ID del frontend)

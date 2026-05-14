@@ -110,6 +110,9 @@ export const calcularResumen = (
       per,
       desc,
       valorDescontadoTotales,
+      valorCortesiaTotales: cor * p.precio,
+      valorPerdidaTotales: per * p.precio,
+      ventaPotencial: consumo * p.precio,
       fin,
       disponible,
       consumo,
@@ -179,7 +182,14 @@ export const exportarExcel = async (
   ws.addRow(['Evento:', nombreEvento, '', 'Fecha:', fecha]);
   ws.addRow([]);
 
-  const tableHeader = ['PRODUCTO', 'PRESENTACIÓN', 'PRECIO', 'INICIAL', 'RECARGAS', 'CORTESÍAS', 'DESC.', 'BAJAS', 'FINAL', 'VENDIDO', 'INGRESO BRUTO', '', 'COSTO UNIT', 'COSTO TOTAL', 'PROVEEDOR'];
+  const tableHeader = [
+    'PRODUCTO', 'PRECIO', 'INICIAL', 'RECARGAS', 'FINAL', 'CONSUMO', 
+    'CORTESÍAS (UND)', 'VALOR CORT. ($)', 
+    'DESC. (UND)', 'VALOR DESC. ($)', 
+    'BAJAS (UND)', 'VALOR BAJAS ($)', 
+    'VENDIDO (UND)', 'INGRESO REAL ($)', 
+    '', 'COSTO UNIT', 'COSTO TOTAL', 'PROVEEDOR'
+  ];
   const headerRow = ws.addRow(tableHeader);
   headerStyle(ws, headerRow.number, tableHeader.length);
 
@@ -192,8 +202,24 @@ export const exportarExcel = async (
     const prods = resumen.filter(p => p.categoria === cat);
     prods.forEach(p => {
       ws.addRow([
-        p.nombre, p.unidad, p.precio, p.ini, p.rec, p.cor, p.desc || 0, p.per, p.fin, p.vendido, 
-        p.ingresoEsperado, '', p.costo, p.consumo * p.costo, p.proveedor || '-',
+        p.nombre, 
+        p.precio, 
+        p.ini, 
+        p.rec, 
+        p.fin, 
+        p.consumo, 
+        p.cor, 
+        p.valorCortesiaTotales, 
+        p.desc || 0, 
+        p.valorDescontadoTotales, 
+        p.per, 
+        p.valorPerdidaTotales,
+        p.vendido + (p.desc || 0), // Total unidades que generaron algún ingreso
+        p.ingresoEsperado, 
+        '', 
+        p.costo, 
+        p.consumo * p.costo, 
+        p.proveedor || '-',
       ]);
     });
   });
@@ -249,9 +275,43 @@ export const exportarExcel = async (
   };
 
   if (recargas.length > 0) createDetailSheet('Recargas', ['HORA', 'PRODUCTO', 'CANT', 'PROVEEDOR'], recargas.map(r => [r.hora, pName(r.producto_id), r.cantidad, r.proveedor]));
-  if (cortesias.length > 0) createDetailSheet('Cortesías', ['HORA', 'PRODUCTO', 'CANT', 'PARA', 'MOTIVO'], cortesias.map(c => [c.hora, pName(c.producto_id), c.cantidad, c.persona, c.motivo]));
+  
+  if (cortesias.length > 0) {
+    createDetailSheet(
+      'Cortesías', 
+      ['HORA', 'PRODUCTO', 'CANT', 'P. VENTA UNIT ($)', 'VALOR TOTAL ($)', 'PARA', 'MOTIVO'], 
+      cortesias.map(c => {
+        const prod = productos.find(p => p.id === c.producto_id);
+        const precio = prod?.precio || 0;
+        return [c.hora, pName(c.producto_id), c.cantidad, precio, c.cantidad * precio, c.persona, c.motivo];
+      })
+    );
+  }
+
   if (perdidas.length > 0) createDetailSheet('Bajas', ['HORA', 'PRODUCTO', 'CANT', 'MOTIVO'], perdidas.map(p => [p.hora, pName(p.producto_id), p.cantidad, p.motivo]));
-  if (descuentos.length > 0) createDetailSheet('Descuentos', ['HORA', 'PRODUCTO', 'CANT', '%', 'DESC', 'MOTIVO'], descuentos.map(d => [d.hora, pName(d.producto_id), d.cantidad, d.porcentaje, d.valor_descontado, d.motivo]));
+  
+  if (descuentos.length > 0) {
+    createDetailSheet(
+      'Descuentos', 
+      ['HORA', 'PRODUCTO', 'CANT', 'P. ORIGINAL ($)', 'SUBTOTAL ($)', '% DESC', 'VALOR DESC ($)', 'INGRESO FINAL ($)', 'MOTIVO'], 
+      descuentos.map(d => {
+        const prod = productos.find(p => p.id === d.producto_id);
+        const precio = prod?.precio || 0;
+        const subtotal = d.cantidad * precio;
+        return [
+          d.hora, 
+          pName(d.producto_id), 
+          d.cantidad, 
+          precio, 
+          subtotal, 
+          `${d.porcentaje}%`, 
+          d.valor_descontado, 
+          subtotal - d.valor_descontado, 
+          d.motivo
+        ];
+      })
+    );
+  }
 
   // ═══════════════════════════════════════════
   // PESTAÑA: LIQUIDACIÓN PROVEEDORES

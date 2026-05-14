@@ -47,7 +47,7 @@ const INIT: AppState = {
   inventarioFinal: {}, 
   dinero: { efectivo: 0, datafono: 0, nequi: 0 }, 
   log: [],
-  isDark: false,
+  isDark: true,
 };
 
 const STORAGE_KEY = 'barrapro_state_v2';
@@ -378,51 +378,128 @@ export default function BarraProApp() {
     deudas[r.proveedor] = (deudas[r.proveedor] || 0) + r.cantidad * prod.costo;
   });
 
+  const handleSiguienteNoche = () => {
+    // Convertir inventarioFinal (Record<string, number>) al formato de inventarioInicial
+    const nuevoInvInicial: Record<string, { cantidad: number; proveedor: string }> = {};
+    Object.entries(state.inventarioFinal).forEach(([prodId, cantidad]) => {
+      if (cantidad > 0) {
+        const proveedorAnterior = state.inventarioInicial[prodId]?.proveedor || '';
+        nuevoInvInicial[prodId] = { cantidad, proveedor: proveedorAnterior };
+      }
+    });
+
+    localStorage.removeItem(STORAGE_KEY);
+    setState({
+      ...INIT,
+      productos: state.productos,
+      proveedores: state.proveedores,
+      inventarioInicial: nuevoInvInicial,
+      step: 'apertura',
+    });
+  };
+
   const toggleDark = () => setState(s => ({ ...s, isDark: !s.isDark }));
 
   return (
     <div className={`${state.isDark ? 'dark' : ''} antialiased transition-colors duration-500`}>
       <style>{`
-        .dark .bg-white { background-color: #1e293b !important; }
-        .dark .bg-slate-50 { background-color: #0f172a !important; }
-        .dark .text-slate-900 { color: #f8fafc !important; }
-        .dark .text-slate-600 { color: #cbd5e1 !important; }
-        .dark .text-slate-500 { color: #94a3b8 !important; }
-        .dark .text-slate-400 { color: #64748b !important; }
-        .dark .border-slate-200 { border-color: #334155 !important; }
-        .dark .border-slate-100 { border-color: #1e293b !important; }
-        .dark .border-slate-200\\/60 { border-color: #334155 !important; }
-        .dark input { background-color: #0f172a !important; color: #f8fafc !important; border-color: #334155 !important; }
-        .dark input::placeholder { color: #475569 !important; }
-        .dark .bg-slate-100\\/50 { background-color: #1e293b !important; border-color: #334155 !important; }
-      `}</style>
-      <div className="min-h-screen bg-slate-50 relative overflow-hidden font-sans transition-colors duration-500 text-slate-900">
-        {/* Luces de fondo premium */}
-        <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-indigo-100/30 blur-[140px] rounded-full -z-10 -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-slate-200/40 blur-[120px] rounded-full -z-10 translate-x-1/4 -translate-y-1/4" />
+        .dark .bg-white { background-color: rgba(255,255,255,0.03); backdrop-filter: blur(12px); border-color: rgba(255,255,255,0.05); }
+        .dark .bg-slate-50 { background-color: #000000 !important; }
+        .dark .bg-slate-100 { background-color: rgba(255,255,255,0.08) !important; }
+        .dark .text-slate-950, .dark .text-slate-900 { color: #ffffff !important; }
+        .dark .text-slate-800 { color: #f8fafc !important; }
+        .dark .text-slate-700 { color: #f1f5f9 !important; }
+        .dark .text-slate-600 { color: #e2e8f0 !important; }
+        .dark .text-slate-500 { color: #e2e8f0 !important; }
+        .dark .text-slate-400 { color: #cbd5e1 !important; }
+        .dark .text-slate-300 { color: #94a3b8 !important; }
+        .dark .border-slate-200 { border-color: rgba(255,255,255,0.1) !important; }
+        .dark .border-slate-100 { border-color: rgba(255,255,255,0.05) !important; }
+        .dark .border-slate-200\\/60 { border-color: rgba(255,255,255,0.05) !important; }
+        
+        /* Fix specialized colors in dark mode */
+        .dark .text-amber-900 { color: #fef3c7 !important; }
+        .dark .text-amber-800 { color: #fde68a !important; }
+        .dark .text-amber-700 { color: #fcd34d !important; }
+        .dark .bg-amber-50 { background-color: rgba(251, 191, 36, 0.15) !important; border-color: rgba(251, 191, 36, 0.2) !important; }
+        .dark .bg-amber-100 { background-color: rgba(251, 191, 36, 0.2) !important; }
+        .dark .text-amber-600 { color: #fbbf24 !important; }
 
-        <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-40 transition-colors duration-500">
+        .dark .bg-cyan-50 { background-color: rgba(0, 210, 255, 0.15) !important; border-color: rgba(0, 210, 255, 0.2) !important; }
+        .dark .bg-cyan-100 { background-color: rgba(0, 210, 255, 0.2) !important; }
+        .dark .text-cyan-900 { color: #cffafe !important; }
+        .dark .text-cyan-800 { color: #a5f3fc !important; }
+        .dark .text-cyan-700 { color: #67e8f9 !important; }
+        .dark .text-cyan-600 { color: #00d2ff !important; }
+
+        .dark .text-indigo-600 { color: #00d2ff !important; }
+        .dark .bg-indigo-50 { background-color: rgba(0, 210, 255, 0.1) !important; }
+
+        .dark .text-rose-600 { color: #fb7185 !important; }
+        .dark .bg-rose-50 { background-color: rgba(225, 29, 72, 0.1) !important; border-color: rgba(225, 29, 72, 0.2) !important; }
+        
+        .dark .text-orange-600 { color: #fb923c !important; }
+        .dark .bg-orange-50 { background-color: rgba(234, 88, 12, 0.1) !important; border-color: rgba(234, 88, 12, 0.2) !important; }
+
+        .dark .text-blue-600 { color: #60a5fa !important; }
+        .dark .bg-blue-50 { background-color: rgba(37, 99, 235, 0.1) !important; border-color: rgba(37, 99, 235, 0.2) !important; }
+
+        .dark .text-magenta-600, .dark .text-[#ff0099] { color: #ff4db8 !important; }
+        .dark .bg-magenta-50 { background-color: rgba(255, 0, 153, 0.1) !important; border-color: rgba(255, 0, 153, 0.2) !important; }
+        
+        .dark input, .dark select { background-color: rgba(255,255,255,0.03) !important; color: #ffffff !important; border-color: rgba(255,255,255,0.15) !important; }
+        .dark input:focus, .dark select:focus { border-color: #00d2ff !important; background-color: rgba(255,255,255,0.05) !important; }
+        .dark input::placeholder { color: #9ca3af !important; }
+        .dark .bg-slate-100\\/50 { background-color: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.1) !important; }
+        .dark .bg-indigo-600 { background: linear-gradient(to right, #00d2ff, #ff0099) !important; border: none !important; }
+        .dark .shadow-sm { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3) !important; }
+      `}</style>
+      <div className="min-h-screen bg-slate-50 relative overflow-hidden font-sans transition-colors duration-500 text-slate-900 bg-grid">
+        {/* Luces de fondo premium */}
+        <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-cyan-500/20 blur-[140px] rounded-full -z-10 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+        <div className="absolute top-[20%] right-0 w-[600px] h-[600px] bg-pink-500/15 blur-[120px] rounded-full -z-10 translate-x-1/4 animate-float" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 blur-[100px] rounded-full -z-10 translate-y-1/2" />
+
+        <nav className={`${state.isDark ? 'bg-black/90 border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]' : 'bg-white/90 border-slate-200 shadow-sm'} backdrop-blur-xl border-b sticky top-0 z-40 transition-colors duration-500`}>
           <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between gap-6">
             <div className="flex items-center gap-4 shrink-0">
-              <div>
-                <span className="text-lg font-bold text-slate-900 tracking-tight block leading-none">BarraPRO</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-sm" />
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Enterprise Event Management</p>
+              <div className="flex items-center gap-3">
+                <div className={`w-14 h-14 rounded-2xl overflow-hidden bg-black border-2 ${state.isDark ? 'border-slate-700 shadow-[0_0_25px_rgba(0,210,255,0.4)]' : 'border-slate-200 shadow-md'} group hover:border-[#00d2ff] transition-all duration-500`}>
+                  <img 
+                    src="/logo.jpeg" 
+                    alt="ideas+I Logo" 
+                    className="w-full h-full object-cover transform group-hover:scale-125 transition-transform duration-700"
+                  />
+                </div>
+                <div>
+                  <span className={`text-2xl font-[1000] tracking-tighter block leading-none ${state.isDark ? 'text-white' : 'text-slate-900'}`}>
+                    ideas<span className="text-[#ff0099]">+</span>I
+                  </span>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#00d2ff] shadow-[0_0_8px_#00d2ff]" />
+                      <span className="w-2 h-2 rounded-full bg-[#ff0099] shadow-[0_0_8px_#ff0099] animate-pulse" />
+                    </div>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${state.isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Premium Management
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex bg-slate-100/50 border border-slate-200 p-1.5 rounded-2xl gap-1 overflow-x-auto">
+            <div className={`flex border p-1.5 rounded-2xl gap-1 overflow-x-auto backdrop-blur-sm ${state.isDark ? 'bg-black/50 border-white/10' : 'bg-slate-100/80 border-slate-200'}`}>
               {STEPS.map((s, i) => (
                 <button
                   key={s}
                   onClick={() => i <= stepIdx && setState(st => ({ ...st, step: s }))}
                   disabled={i > stepIdx}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                    state.step === s ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 ring-2 ring-indigo-500/20'
-                    : i < stepIdx ? 'text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm'
-                    : 'text-slate-400 cursor-not-allowed opacity-50'
+                  className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${
+                    state.step === s 
+                    ? (state.isDark ? 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-[0_0_25px_rgba(0,210,255,0.4)] scale-110' : 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-lg scale-105')
+                    : i < stepIdx 
+                      ? (state.isDark ? 'text-white/70 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-white hover:text-cyan-600 shadow-sm')
+                      : (state.isDark ? 'text-white/30 cursor-not-allowed' : 'text-slate-400 cursor-not-allowed opacity-50')
                   }`}
                 >
                   {STEP_LABELS[s]}
@@ -433,20 +510,22 @@ export default function BarraProApp() {
             <div className="flex items-center gap-3">
               {/* GRUPO DE ESTADO */}
               <div className={`flex items-center gap-2.5 px-4 py-2 rounded-2xl border transition-all shadow-sm ${
-                !isOnline ? 'bg-rose-50 border-rose-200 text-rose-500 animate-pulse' :
-                isSyncing ? 'bg-amber-50 border-amber-200 text-amber-500' :
-                'bg-emerald-50 border-emerald-200 text-emerald-500'
+                !isOnline ? (state.isDark ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-500') :
+                isSyncing ? (state.isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-500') :
+                (state.isDark ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600')
               }`}>
                 {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : 
                  !isOnline ? <AlertTriangle size={14} /> : 
-                 <BarChart3 size={14} />}
-                <span className="text-[10px] font-black uppercase tracking-wider">
+                 <div className={`w-1.5 h-1.5 rounded-full ${state.isDark ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 'bg-[#00d2ff] shadow-[0_0_8px_#00d2ff]'}`} />}
+                <span className="text-[10px] font-black uppercase tracking-widest">
                   {!isOnline ? 'Sin Conexión' : isSyncing ? 'Sincronizando' : 'Nube Segura'}
                 </span>
               </div>
 
               {/* GRUPO DE ACCIONES */}
-              <div className="flex items-center gap-2 bg-slate-100/80 p-1 rounded-2xl border border-slate-200">
+              <div className={`flex items-center gap-2 p-1 rounded-2xl border transition-all ${
+                state.isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100/80 border-slate-200'
+              }`}>
                 <button 
                   onClick={() => {
                     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
@@ -457,7 +536,9 @@ export default function BarraProApp() {
                     downloadAnchorNode.click();
                     downloadAnchorNode.remove();
                   }} 
-                  className="p-2.5 rounded-xl hover:bg-white text-slate-400 hover:text-indigo-600 transition-all hover:shadow-sm"
+                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
+                    state.isDark ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-indigo-600 hover:bg-white'
+                  }`}
                   title="Descargar copia de seguridad (Backup)"
                 >
                   <PackageOpen size={18} />
@@ -465,7 +546,9 @@ export default function BarraProApp() {
 
                 <button 
                   onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
-                  className="p-2.5 rounded-xl hover:bg-white text-slate-400 hover:text-indigo-600 transition-all hover:shadow-sm"
+                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
+                    state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'
+                  }`}
                   title="Configuración de Base de Datos"
                 >
                   <Settings size={18} />
@@ -473,19 +556,23 @@ export default function BarraProApp() {
 
                 <button 
                   onClick={toggleDark} 
-                  className="p-2.5 rounded-xl hover:bg-white text-slate-400 hover:text-indigo-600 transition-all hover:shadow-sm"
+                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
+                    state.isDark ? 'text-white/70 hover:text-[#ff0099] hover:bg-white/10' : 'text-slate-400 hover:text-[#ff0099] hover:bg-white'
+                  }`}
                 >
                   {state.isDark ? <Sun size={18} /> : <Moon size={18} />}
                 </button>
               </div>
 
               {state.evento && (
-                <div className="hidden lg:flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border border-slate-200 shadow-sm shrink-0 ml-2">
+                <div className={`hidden lg:flex items-center gap-3 px-5 py-2.5 rounded-2xl border shadow-sm shrink-0 ml-2 ${
+                  state.isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'
+                }`}>
                   <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">Activo</span>
-                    <span className="text-xs font-black text-slate-900 tracking-tight">{state.evento.nombre}</span>
+                    <span className="text-[9px] font-black text-[#ff0099] uppercase tracking-widest leading-none mb-1">Activo</span>
+                    <span className={`text-xs font-black tracking-tight ${state.isDark ? 'text-white' : 'text-slate-900'}`}>{state.evento.nombre}</span>
                   </div>
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                  <div className="w-2 h-2 rounded-full bg-[#00d2ff] animate-pulse shadow-[0_0_8px_#00d2ff]" />
                 </div>
               )}
             </div>
@@ -542,6 +629,7 @@ export default function BarraProApp() {
               dinero={state.dinero} 
               log={state.log}
               onNuevoEvento={() => { localStorage.removeItem(STORAGE_KEY); setState(INIT); }} 
+              onSiguienteNoche={handleSiguienteNoche}
               onAtras={() => setState(s => ({ ...s, step: 'cierre' }))}
             />
           )}

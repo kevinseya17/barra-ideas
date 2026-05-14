@@ -90,6 +90,9 @@ export interface ResumenProducto extends Producto {
   per: number;
   desc?: number;
   valorDescontadoTotales?: number;
+  valorCortesiaTotales?: number;
+  valorPerdidaTotales?: number;
+  ventaPotencial?: number;
   fin: number;
   disponible: number;
   consumo: number;

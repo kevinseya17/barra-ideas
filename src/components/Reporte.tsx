@@ -18,11 +18,15 @@ interface Props {
   dinero: { efectivo: number; datafono: number; nequi: number };
   log: any[];
   onNuevoEvento: () => void;
+  onSiguienteNoche: () => void;
   onAtras: () => void;
 }
 
-export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, onNuevoEvento, onAtras }: Props) {
+export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
   const totalVentas = resumen.reduce((a, b) => a + b.ingresoEsperado, 0);
+  const totalDescuentos = resumen.reduce((a, b) => a + (b.valorDescontadoTotales || 0), 0);
+  const totalCortesiasVenta = resumen.reduce((a, b) => a + (b.valorCortesiaTotales || 0), 0);
+  const ventaPotencialTotal = resumen.reduce((a, b) => a + (b.ventaPotencial || 0), 0);
   const totalGastosEfectivo = gastos.filter(g => g.metodo === 'efectivo').reduce((a, b) => a + Number(b.monto), 0);
   const totalEsperado = totalVentas + (evento.caja_inicial || 0) - totalGastosEfectivo;
   const totalRecibido = dinero.efectivo + dinero.datafono + dinero.nequi;
@@ -78,7 +82,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
       {/* Header & Actions */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-10">
         <SectionHeader
-          step="AUDITORÍA FINAL DE EVENTO"
+          step="04 REPORTE"
           title={evento.nombre}
           sub={`${evento.fecha} · Responsable: ${evento.responsable}`}
         />
@@ -86,60 +90,96 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
           <Btn variant="ghost" icon={<ArrowLeft size={16} />} onClick={onAtras}>
             Corregir Auditoría
           </Btn>
-          <Btn variant="indigo" icon={<Download size={16} />} onClick={doExport}>
+          <Btn variant="brand" icon={<Download size={16} />} onClick={doExport}>
             Exportar Informe CSV
           </Btn>
-          <Btn variant="ghost" icon={<RefreshCw size={16} />} onClick={onNuevoEvento}>
-            Nuevo Evento
-          </Btn>
+        </div>
+
+        {/* Botones de modo de cierre */}
+        <div className="flex flex-col gap-3 shrink-0">
+          <button
+            onClick={onSiguienteNoche}
+            className="group relative flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl shadow-lg shadow-amber-200 hover:shadow-xl hover:shadow-amber-300 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+          >
+            <span className="text-2xl">🌙</span>
+            <div className="text-left">
+              <p className="text-sm font-black tracking-tight">Siguiente Noche</p>
+              <p className="text-[10px] font-medium text-amber-100 leading-tight">El inventario final pasa a ser el inicial de mañana</p>
+            </div>
+          </button>
+          <button
+            onClick={() => {
+              if (confirm('¿Cerrar evento definitivamente? Se perderá la continuidad de inventario.')) {
+                onNuevoEvento();
+              }
+            }}
+            className="flex items-center gap-3 px-6 py-3 bg-white border-2 border-slate-200 text-slate-500 rounded-2xl hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50 transition-all duration-200"
+          >
+            <span className="text-lg">🏁</span>
+            <div className="text-left">
+              <p className="text-xs font-bold tracking-tight">Cerrar Evento Definitivo</p>
+              <p className="text-[9px] text-slate-400 leading-tight">Empezar de cero sin arrastrar inventario</p>
+            </div>
+          </button>
         </div>
       </div>
 
       {/* KPI Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <Stat
-          label="Ventas Brutas"
+          label="Ingreso Real (Ventas)"
           value={fmt(totalVentas)}
-          color="text-indigo-600"
-          icon={<TrendingUp size={20} />}
-        />
-        <Stat
-          label="Gastos en Caja"
-          value={fmt(totalGastosEfectivo)}
-          color="text-orange-500"
+          color="text-emerald-600"
           icon={<DollarSign size={20} />}
         />
         <Stat
-          label="Total Caja Físico"
+          label="Venta Potencial"
+          value={fmt(ventaPotencialTotal)}
+          color="text-slate-400"
+          icon={<FileText size={20} />}
+          sub="Sin descuentos ni cortesías"
+        />
+        <Stat
+          label="Impacto Descuentos"
+          value={`-${fmt(totalDescuentos)}`}
+          color="text-blue-500"
+          icon={<TrendingDown size={20} />}
+        />
+        <Stat
+          label="Cortesías (Venta)"
+          value={`-${fmt(totalCortesiasVenta)}`}
+          color="text-rose-400"
+          icon={<TrendingDown size={20} />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+        <Stat
+          label="Caja Conciliada (Físico)"
           value={fmt(totalRecibido)}
           color="text-slate-900"
-          icon={<DollarSign size={20} />}
-        />
-        <Stat
-          label={ok ? 'Balance (Sobrante)' : 'Balance (Faltante)'}
-          value={fmt(Math.abs(diferencia))}
-          color={ok ? 'text-emerald-600' : 'text-rose-500'}
-          sub={ok ? '✓ Cuadre Exitoso' : '🚨 Revisar Incidencias'}
-          icon={ok ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+          icon={<RefreshCw size={20} />}
+          sub={`Balance: ${fmt(diferencia)}`}
         />
         <Stat
           label="Utilidad Estimada"
           value={fmt(utilidadBruta)}
-          color="text-violet-600"
+          color="text-[#ff0099]"
           icon={<TrendingUp size={20} />}
         />
         <Stat
-          label="Costo Cortesías"
+          label="Costo de Cortesías"
           value={fmt(totalCortesias)}
           color="text-amber-500"
           icon={<Package size={20} />}
+          sub="Inversión (Precio Costo)"
         />
       </div>
 
       {/* Motor de Alertas Inteligentes */}
-      <Card className="p-8 mb-10 border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white">
+      <Card className="p-8 mb-10 border-cyan-100 bg-gradient-to-br from-cyan-50/50 to-white">
         <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-          <Lightbulb size={20} className="text-indigo-500" /> Análisis Inteligente de Auditoría
+          <Lightbulb size={20} className="text-[#00d2ff]" /> Análisis Inteligente de Auditoría
         </h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {insights.map((ins, i) => (
@@ -171,7 +211,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
               { label: 'Ventas Totales', val: totalVentas, color: 'text-slate-900' },
               { label: 'Gastos (Efectivo)', val: -totalGastosEfectivo, color: 'text-rose-500 font-bold' },
               { label: '------------------', val: 0, color: 'text-slate-200' },
-              { label: 'TOTAL ESPERADO', val: totalEsperado, color: 'text-indigo-600 font-black' },
+              { label: 'TOTAL ESPERADO', val: totalEsperado, color: 'text-cyan-600 font-black' },
             ].filter(x => x.label !== '------------------' || totalGastosEfectivo > 0).map((d, i) => (
               <div key={i} className={`flex justify-between items-end ${d.label === '------------------' ? '' : 'border-b border-slate-50 pb-4'}`}>
                 {d.label === '------------------' ? (
@@ -383,13 +423,13 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
             {descuentos.map((d, i) => (
               <div key={i} className="p-4 rounded-2xl bg-white border border-indigo-100 shadow-sm transition-all hover:shadow-md">
                 <div className="flex justify-between items-center mb-2">
-                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{d.hora || '--:--'}</p>
-                  <Badge color="indigo">-{d.porcentaje}%</Badge>
+                  <p className="text-[10px] font-black text-cyan-600 uppercase tracking-widest">{d.hora || '--:--'}</p>
+                  <Badge color="brand">-{d.porcentaje}%</Badge>
                 </div>
                 <p className="font-bold text-slate-900 text-sm">{pName(d.producto_id)}</p>
                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-50">
                   <p className="text-xs text-slate-500">Unidades: <span className="font-bold text-slate-900">{d.cantidad}</span></p>
-                  <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00d2ff]" />
                 </div>
               </div>
             ))}
@@ -451,7 +491,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Package size={20} className="text-slate-400" /> Movimiento de Inventario
             </h3>
-            <Badge color="indigo">Total {resumen.length} Productos</Badge>
+            <Badge color="brand">Total {resumen.length} Productos</Badge>
           </div>
           
           <div className="overflow-x-auto">
@@ -470,7 +510,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {resumen.map(p => (
-                  <tr key={p.id} className="hover:bg-indigo-50/20 transition-colors group">
+                  <tr key={p.id} className="hover:bg-cyan-50/20 transition-colors group">
                     <td className="py-4 px-2">
                       <p className="font-bold text-slate-800">{p.nombre}</p>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{p.categoria}</p>
@@ -478,10 +518,10 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
                     <td className="py-4 px-2 text-center font-bold text-slate-500">{p.disponible}</td>
                     <td className="py-4 px-2 text-center font-bold text-slate-500">{p.fin}</td>
                     <td className="py-4 px-2 text-center font-bold text-amber-500 bg-amber-50/30">{p.cor}</td>
-                    <td className="py-4 px-2 text-center font-bold text-indigo-500 bg-indigo-50/30">{p.desc || 0}</td>
+                    <td className="py-4 px-2 text-center font-bold text-cyan-500 bg-cyan-50/30">{p.desc || 0}</td>
                     <td className="py-4 px-2 text-center font-bold text-rose-500 bg-rose-50/30">{p.per}</td>
-                    <td className="py-4 px-2 text-center font-black text-slate-900 bg-slate-50 group-hover:bg-indigo-50 transition-colors">{p.vendido}</td>
-                    <td className="py-4 px-2 text-right font-black text-indigo-600 whitespace-nowrap">{fmt(p.ingresoEsperado)}</td>
+                    <td className="py-4 px-2 text-center font-black text-slate-900 bg-slate-50 group-hover:bg-cyan-50 transition-colors">{p.vendido}</td>
+                    <td className="py-4 px-2 text-right font-black text-cyan-600 whitespace-nowrap">{fmt(p.ingresoEsperado)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,10 +1,9 @@
-
 'use client';
-import React, { useState } from 'react';
-import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, PackageOpen, Percent, Banknote, Trash2, Pencil, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, Percent, Banknote, Trash2, Pencil, ShieldCheck, ChevronDown } from 'lucide-react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from '@/types';
-import { uid, nowTime } from '@/utils/calculos';
-import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
+import { nowTime } from '@/utils/calculos';
+import { Btn, Card, Field, inputCls, Badge, SectionHeader } from './UI';
 
 type Tab = 'inventario' | 'recargas' | 'cortesias' | 'perdidas' | 'descuentos' | 'gastos' | 'stock';
 
@@ -26,7 +25,7 @@ interface Props {
   onAddDescuento: (d: Omit<Descuento, 'id'>) => void;
   onAddGasto: (g: Omit<Gasto, 'id'>) => void;
   onRemoveLogEntry: (logId: string) => void;
-  onUpdateLogEntry: (logId: string, newData: any) => void;
+  onUpdateLogEntry: (logId: string, newData: Partial<Recarga & Cortesia & Perdida & Descuento & Gasto>) => void;
   onCierre: () => void;
   onAtras: () => void;
 }
@@ -35,8 +34,8 @@ const PIN_ADMIN = "1234";
 
 const TIPO_LOG: Record<LogEntry['tipo'], string> = {
   info: 'bg-slate-100 text-slate-500 border-slate-200',
-  recarga: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-  cortesia: 'bg-violet-50 text-violet-600 border-violet-100',
+  recarga: 'bg-cyan-50 text-cyan-600 border-cyan-100',
+  cortesia: 'bg-magenta-50 text-[#ff0099] border-pink-100',
   perdida: 'bg-rose-50 text-rose-600 border-rose-100',
   descuento: 'bg-blue-50 text-blue-600 border-blue-100',
   gasto: 'bg-orange-50 text-orange-600 border-orange-100',
@@ -47,16 +46,29 @@ export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
   onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onUpdateLogEntry, onCierre, onAtras,
 }: Props) {
-  const [tab, setTab] = useState<Tab>('inventario');
-  const [invLocal, setInvLocal] = useState<Record<string, { cantidad: string, proveedor: string }>>(() =>
-    Object.fromEntries(productos.map(p => {
-      const data = inventarioInicial[p.id];
-      return [p.id, { 
-        cantidad: data ? String(data.cantidad) : '', 
-        proveedor: data?.proveedor || proveedores[0] || '' 
-      }];
-    }))
+  const draftKey = useMemo(() => `barrapro_operacion_draft_${evento.nombre}_${evento.fecha}`, [evento.nombre, evento.fecha]);
+  const persistentStorage = typeof window !== 'undefined' ? localStorage : null;
+
+  const baseInvLocal = useMemo<Record<string, { cantidad: string; proveedor: string }>>(
+    () =>
+      Object.fromEntries(
+        productos.map(p => {
+          const data = inventarioInicial[p.id];
+          return [
+            p.id,
+            {
+              cantidad: data ? String(data.cantidad) : '',
+              proveedor: data?.proveedor || proveedores[0] || '',
+            },
+          ];
+        })
+      ),
+    [productos, inventarioInicial, proveedores]
   );
+
+  const [tab, setTab] = useState<Tab>('inventario');
+  const [invLocal, setInvLocal] = useState<Record<string, { cantidad: string, proveedor: string }>>(baseInvLocal);
+  const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
   const [rec, setRec] = useState({ producto_id: productos[0]?.id ?? '', cantidad: '', proveedor: proveedores[0] || '' });
   const [cor, setCor] = useState({ producto_id: productos[0]?.id ?? '', cantidad: '', persona: '', motivo: '' });
   const [per, setPer] = useState({ producto_id: productos[0]?.id ?? '', cantidad: '', motivo: '' });
@@ -69,11 +81,66 @@ export default function Operacion({
   const [guardadoInv, setGuardadoInv] = useState(Object.keys(inventarioInicial).length > 0);
   const [ticket, setTicket] = useState<LogEntry | null>(null);
 
+  useEffect(() => {
+    const hydrateDraft = () => {
+      try {
+        const raw = persistentStorage?.getItem(draftKey);
+        if (!raw) {
+          setInvLocal(baseInvLocal);
+          setGuardadoInv(Object.keys(inventarioInicial).length > 0);
+          return;
+        }
+        const draft = JSON.parse(raw) as {
+          tab?: Tab;
+          invLocal?: Record<string, { cantidad: string; proveedor: string }>;
+          rec?: { producto_id: string; cantidad: string; proveedor: string };
+          cor?: { producto_id: string; cantidad: string; persona: string; motivo: string };
+          per?: { producto_id: string; cantidad: string; motivo: string };
+          desc?: { producto_id: string; cantidad: string; porcentaje: string; motivo: string };
+          gas?: { concepto: string; monto: string; metodo: 'efectivo' | 'nequi' | 'datafono' };
+          guardadoInv?: boolean;
+        };
+
+        if (draft.tab) setTab(draft.tab);
+        setInvLocal({ ...baseInvLocal, ...(draft.invLocal || {}) });
+        if (draft.rec) setRec(draft.rec);
+        if (draft.cor) setCor(draft.cor);
+        if (draft.per) setPer(draft.per);
+        if (draft.desc) setDesc(draft.desc);
+        if (draft.gas) setGas(draft.gas);
+        if (typeof draft.guardadoInv === 'boolean') setGuardadoInv(draft.guardadoInv);
+      } catch {
+        setInvLocal(baseInvLocal);
+        setGuardadoInv(Object.keys(inventarioInicial).length > 0);
+      }
+    };
+
+    hydrateDraft();
+  }, [draftKey, baseInvLocal, inventarioInicial]);
+
+  useEffect(() => {
+    try {
+      persistentStorage?.setItem(
+        draftKey,
+        JSON.stringify({
+          tab,
+          invLocal,
+          rec,
+          cor,
+          per,
+          desc,
+          gas,
+          guardadoInv,
+        })
+      );
+    } catch {}
+  }, [draftKey, tab, invLocal, rec, cor, per, desc, gas, guardadoInv]);
+
   // --- ESTADOS DE SEGURIDAD Y EDICIÓN ---
   const [adminAction, setAdminAction] = useState<{ type: 'delete' | 'edit', log: LogEntry } | null>(null);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
-  const [editData, setEditData] = useState<any>(null);
+  const [editData, setEditData] = useState<Partial<Recarga & Cortesia & Perdida & Descuento & Gasto> | null>(null);
 
   // --- CÁLCULOS EN VIVO ---
   const totalPotencial = productos.reduce((acc, p) => {
@@ -102,18 +169,6 @@ export default function Operacion({
   const totalDescontado = descuentos.reduce((a, b) => a + Number(b.valor_descontado || 0), 0);
 
   // --- CÁLCULO DE VENTAS PROYECTADAS ---
-  const ventasProyectadas = productos.reduce((acc, p) => {
-    const inicial = inventarioInicial[p.id]?.cantidad || 0;
-    const masRecargas = recargas.filter(r => r.producto_id === p.id).reduce((sum, r) => sum + Number(r.cantidad), 0);
-    const menosCortesias = cortesias.filter(c => c.producto_id === p.id).reduce((sum, c) => sum + Number(c.cantidad), 0);
-    const menosPerdidas = perdidas.filter(per => per.producto_id === p.id).reduce((sum, per) => sum + Number(per.cantidad), 0);
-    
-    const disponible = inicial + masRecargas - menosCortesias - menosPerdidas;
-    const actual = Number(invLocal[p.id]?.cantidad || disponible); // Si no ha puesto nada, asume que no ha vendido nada
-    
-    const consumido = Math.max(0, disponible - actual);
-    return acc + (consumido * p.precio);
-  }, 0);
 
   const pName = (id: string) => productos.find(x => x.id === id)?.nombre ?? id;
 
@@ -180,7 +235,7 @@ export default function Operacion({
         {/* MAIN CONSOLE */}
         <div className="flex-1 min-w-0">
           <SectionHeader
-            step="PASO 2 / OPERACIÓN EN VIVO"
+            step="02 OPERACIÓN"
             title={evento.nombre}
             sub={`${evento.responsable} · Registro de actividad en tiempo real`}
           />
@@ -238,11 +293,11 @@ export default function Operacion({
                 onClick={() => setTab(t.id)}
                 className={`flex-1 min-w-[120px] flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
                   tab === t.id 
-                  ? 'bg-white text-indigo-600 shadow-md ring-1 ring-slate-200' 
+                  ? 'bg-white text-[#00d2ff] shadow-md ring-1 ring-slate-200' 
                   : 'text-slate-500 hover:bg-white/50 hover:text-slate-700'
                 }`}
               >
-                <span className={`${tab === t.id ? 'text-indigo-500' : 'text-slate-400'}`}>{t.icon}</span>
+                <span className={`${tab === t.id ? 'text-[#00d2ff]' : 'text-slate-400'}`}>{t.icon}</span>
                 {t.label}
                 {!!t.count && (
                   <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -263,52 +318,88 @@ export default function Operacion({
                   <Badge color={guardadoInv ? 'emerald' : 'yellow'}>{guardadoInv ? 'Sincronizado' : 'Pendiente'}</Badge>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-                  {productos.map(p => (
-                    <div key={p.id} className="flex flex-col gap-4 p-5 rounded-3xl bg-slate-50 border border-slate-100 hover:border-indigo-100 transition-all">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm">{p.nombre}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{p.categoria}</p>
+                {/* Inventario por Categorías */}
+                <div className="space-y-6 mb-10">
+                  {Object.entries(
+                    productos.reduce((acc, p) => {
+                      const cat = p.category || p.categoria || 'Otros';
+                      if (!acc[cat]) acc[cat] = [];
+                      acc[cat].push(p);
+                      return acc;
+                    }, {} as Record<string, Producto[]>)
+                  ).map(([cat, prods]) => (
+                    <div key={cat} className="animate-in fade-in slide-in-from-bottom-2">
+                      <button 
+                        onClick={() => setCollapsedCats(prev => ({ ...prev, [cat]: !prev[cat] }))}
+                        className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5 mb-4 group hover:border-[#00d2ff] transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-sm ${
+                            cat === 'licor' ? 'bg-indigo-500' :
+                            cat === 'cerveza' ? 'bg-amber-500' :
+                            'bg-cyan-500'
+                          }`}>
+                            {cat === 'licor' ? '🥃' : cat === 'cerveza' ? '🍺' : '🥤'}
+                          </div>
+                          <span className="font-black text-slate-800 dark:text-white uppercase tracking-widest text-[10px]">{cat}</span>
+                          <span className="text-[10px] text-slate-400 font-bold ml-2">{prods.length} Productos</span>
                         </div>
-                        <Badge color="slate">{p.unidad}</Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <Field label="Cantidad">
-                          <input
-                            type="number"
-                            className={`${inputCls} text-center text-lg font-bold`}
-                            placeholder="0"
-                            value={invLocal[p.id]?.cantidad ?? ''}
-                            onChange={e => setInvLocal(inv => ({ ...inv, [p.id]: { ...inv[p.id], cantidad: e.target.value } }))}
-                          />
-                        </Field>
-                        <Field label="Proveedor">
-                          <select
-                            className={inputCls}
-                            value={invLocal[p.id]?.proveedor ?? ''}
-                            onChange={e => setInvLocal(inv => ({ ...inv, [p.id]: { ...inv[p.id], proveedor: e.target.value } }))}
-                          >
-                            <option value="">Seleccionar...</option>
-                            {proveedores.map(prov => <option key={prov} value={prov}>{prov}</option>)}
-                          </select>
-                        </Field>
-                      </div>
+                        <div className={`transition-transform duration-300 ${collapsedCats[cat] ? 'rotate-180' : ''}`}>
+                          <ChevronDown size={18} className="text-slate-400" />
+                        </div>
+                      </button>
+
+                      {!collapsedCats[cat] && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in zoom-in-95">
+                          {prods.map(p => (
+                            <div key={p.id} className="group relative flex flex-col gap-5 p-6 rounded-[2rem] bg-white dark:bg-[#0a0a0a] border border-slate-100 dark:border-white/5 shadow-sm hover:shadow-xl hover:shadow-cyan-500/5 transition-all">
+                              <div className="flex items-center justify-between border-b border-slate-50 dark:border-white/5 pb-4">
+                                <div>
+                                  <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight truncate group-hover:text-[#00d2ff] transition-colors">{p.nombre}</p>
+                                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{p.categoria}</p>
+                                </div>
+                                <Badge color="slate">{p.unidad}</Badge>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                <Field label="Cantidad">
+                                  <input
+                                    type="number"
+                                    className={`${inputCls} text-center text-lg font-black h-12 rounded-2xl dark:bg-black`}
+                                    placeholder="0"
+                                    value={invLocal[p.id]?.cantidad ?? ''}
+                                    onChange={e => setInvLocal(inv => ({ ...inv, [p.id]: { ...inv[p.id], cantidad: e.target.value } }))}
+                                  />
+                                </Field>
+                                <Field label="Proveedor">
+                                  <select
+                                    className={`${inputCls} h-12 rounded-2xl text-[11px] font-bold dark:bg-black`}
+                                    value={invLocal[p.id]?.proveedor ?? ''}
+                                    onChange={e => setInvLocal(inv => ({ ...inv, [p.id]: { ...inv[p.id], proveedor: e.target.value } }))}
+                                  >
+                                    <option value="">Seleccionar...</option>
+                                    {proveedores.map(prov => <option key={prov} value={prov}>{prov}</option>)}
+                                  </select>
+                                </Field>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
                 
-                <div className="flex items-center gap-4 pt-4 border-t border-slate-100">
-                  <Btn variant="indigo" icon={<Package size={18} />} onClick={saveInv}>
+                <div className="sticky bottom-6 flex items-center gap-4 pt-8 z-30 border-t border-slate-100 dark:border-white/5 bg-white/50 dark:bg-black/50 backdrop-blur-md rounded-b-[2.5rem] -mx-8 lg:-mx-12 px-8 lg:px-12 pointer-events-none">
+                  <Btn variant="brand" icon={<Package size={18} />} onClick={saveInv} className="pointer-events-auto shadow-2xl scale-110 hover:scale-115 active:scale-105">
                     Guardar Inventario Inicial
                   </Btn>
                   {guardadoInv && (
-                    <div className="flex items-center gap-2 text-indigo-600 animate-in fade-in slide-in-from-left-2">
-                      <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center">
+                    <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400 animate-in fade-in slide-in-from-left-2 pointer-events-auto">
+                      <div className="w-8 h-8 rounded-full bg-cyan-50 dark:bg-cyan-500/10 flex items-center justify-center border border-cyan-100 dark:border-cyan-500/20">
                         <span className="text-sm">✓</span>
                       </div>
-                      <span className="text-xs font-bold uppercase tracking-wider">Base de datos actualizada</span>
+                      <span className="text-xs font-black uppercase tracking-widest">Sincronizado</span>
                     </div>
                   )}
                 </div>
@@ -317,8 +408,8 @@ export default function Operacion({
 
             {/* STOCK EN VIVO (TABLA DE MOVIMIENTOS) */}
             {tab === 'stock' && (
-              <Card className="p-0 overflow-hidden border-indigo-100 shadow-xl shadow-indigo-50/50 animate-in slide-in-from-bottom-4 duration-500">
-                <div className="p-8 bg-indigo-600">
+              <Card className="p-0 overflow-hidden border-[#00d2ff]/20 shadow-xl shadow-cyan-50/50 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="p-8 bg-gradient-to-r from-[#00d2ff] to-[#ff0099]">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-xl font-black text-white uppercase tracking-tight">Inventario en Tiempo Real</h3>
@@ -385,7 +476,7 @@ export default function Operacion({
             {tab === 'recargas' && (
               <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-indigo-50 shadow-2xl">
                 <div className="flex items-center gap-5 mb-10">
-                  <div className="w-14 h-14 rounded-[1.5rem] bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-gradient-to-br from-[#00d2ff] to-[#ff0099] flex items-center justify-center text-white shadow-lg shadow-cyan-200">
                     <RefreshCw size={28} />
                   </div>
                   <div>
@@ -413,7 +504,7 @@ export default function Operacion({
                   </Field>
                 </div>
                 
-                <Btn variant="indigo" icon={<RefreshCw size={16} />} onClick={doRecarga}>Confirmar Recarga</Btn>
+                <Btn variant="brand" icon={<RefreshCw size={16} />} onClick={doRecarga}>Confirmar Recarga</Btn>
 
                 {recargas.length > 0 && (
                   <div className="mt-10 space-y-3 pt-8 border-t border-slate-100">
@@ -428,7 +519,7 @@ export default function Operacion({
                           <p className="text-sm font-bold text-slate-800">{pName(r.producto_id)}</p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase">{r.proveedor || 'Sin proveedor'}</p>
                         </div>
-                        <Badge color="indigo">+{r.cantidad}</Badge>
+                        <Badge color="brand">+{r.cantidad}</Badge>
                       </div>
                     ))}
                   </div>
@@ -440,7 +531,7 @@ export default function Operacion({
             {tab === 'cortesias' && (
               <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-violet-50 shadow-2xl">
                 <div className="flex items-center gap-5 mb-10">
-                  <div className="w-14 h-14 rounded-[1.5rem] bg-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-200">
+                  <div className="w-14 h-14 rounded-[1.5rem] bg-[#ff0099] flex items-center justify-center text-white shadow-lg shadow-pink-200">
                     <Gift size={28} />
                   </div>
                   <div>
@@ -485,7 +576,7 @@ export default function Operacion({
                           <p className="text-sm font-bold text-slate-800">{pName(c.producto_id)}</p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase">PARA: {c.persona}</p>
                         </div>
-                        <Badge color="violet">-{c.cantidad}</Badge>
+                        <Badge color="magenta">-{c.cantidad}</Badge>
                       </div>
                     ))}
                   </div>
@@ -577,7 +668,7 @@ export default function Operacion({
                   </div>
                 </div>
                 
-                <Btn variant="indigo" icon={<Percent size={16} />} onClick={doDescuento}>Aplicar Descuento</Btn>
+                <Btn variant="brand" icon={<Percent size={16} />} onClick={doDescuento}>Aplicar Descuento</Btn>
 
                 {descuentos.length > 0 && (
                   <div className="mt-10 space-y-3 pt-8 border-t border-slate-100">
@@ -673,7 +764,7 @@ export default function Operacion({
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Activity Log</p>
-                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-[#00d2ff] animate-pulse shadow-[0_0_8px_#00d2ff]" />
               </div>
 
               {log.length === 0 && (
@@ -719,7 +810,7 @@ export default function Operacion({
                                   setPinInput('');
                                   setPinError(false);
                                 }}
-                                className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500 text-indigo-500 hover:text-white transition-all shadow-sm"
+                                className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500 text-cyan-500 hover:text-white transition-all shadow-sm"
                                 title="Editar Registro"
                               >
                                 <Pencil size={12} />
@@ -842,7 +933,7 @@ export default function Operacion({
                   <input 
                     type="number" 
                     value={editData?.cantidad || ''} 
-                    onChange={(e) => setEditData({ ...editData, cantidad: e.target.value })}
+                    onChange={(e) => setEditData({ ...editData, cantidad: Number(e.target.value) })}
                     className={inputCls}
                   />
                 </Field>
@@ -851,7 +942,7 @@ export default function Operacion({
                     <input 
                       type="number" 
                       value={editData?.porcentaje || ''} 
-                      onChange={(e) => setEditData({ ...editData, porcentaje: e.target.value })}
+                      onChange={(e) => setEditData({ ...editData, porcentaje: Number(e.target.value) })}
                       className={inputCls}
                     />
                   </Field>
@@ -861,7 +952,7 @@ export default function Operacion({
                     <input 
                       type="number" 
                       value={editData?.monto || ''} 
-                      onChange={(e) => setEditData({ ...editData, monto: e.target.value })}
+                      onChange={(e) => setEditData({ ...editData, monto: Number(e.target.value) })}
                       className={inputCls}
                     />
                   </Field>
