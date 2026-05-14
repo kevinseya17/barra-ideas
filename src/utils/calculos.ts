@@ -127,7 +127,7 @@ export const calcularResumen = (
 
 export const exportarExcel = async (
   resumen: ResumenProducto[],
-  productos: { id: string; nombre: string; costo: number }[],
+  productos: { id: string; nombre: string; costo: number; precio: number }[],
   nombreEvento: string,
   fecha: string,
   efectivo: number,
