@@ -342,7 +342,7 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
           <div className="space-y-8 mb-10">
             {Object.entries(
               productos.reduce((acc, p) => {
-                const cat = p.category || p.categoria || 'otro';
+                const cat = p.categoria || 'otro';
                 if (!acc[cat]) acc[cat] = [];
                 acc[cat].push(p);
                 return acc;
