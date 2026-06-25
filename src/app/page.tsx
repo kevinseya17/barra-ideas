@@ -14,7 +14,7 @@ import Historial from '@/components/Historial';
 type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin' | 'historial';
 const STEPS: Step[] = ['apertura', 'operacion', 'cierre', 'reporte'];
 const STEP_LABELS: Record<Step, string> = {
-  apertura: '01 Apertura', operacion: '02 Operación', cierre: '03 Cierre', reporte: '04 Reporte', admin: '05 Admin'
+  apertura: '01 Apertura', operacion: '02 Operación', cierre: '03 Cierre', reporte: '04 Reporte', admin: '05 Admin', historial: '06 Historial'
 };
 
 interface CierreDraft {
