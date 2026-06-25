@@ -103,6 +103,17 @@ export async function deleteEventoCascade(id: string): Promise<boolean> {
   return !error;
 }
 
+export async function getCierreDinero(eventoId: string): Promise<CierreDinero | null> {
+  const { data, error } = await supabase
+    .from('cierres_dinero')
+    .select('*')
+    .eq('evento_id', eventoId)
+    .maybeSingle();
+  if (error) return null; // Normal: eventos abiertos o anteriores no tienen cierre aún
+  return data;
+}
+
+
 // INVENTARIO
 export async function saveInventarioBatch(items: Omit<InventarioItem, 'id'>[]): Promise<boolean> {
   if (items.length === 0) return true;

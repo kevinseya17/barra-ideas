@@ -1,8 +1,13 @@
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import { Package } from 'lucide-react';
 import { Producto } from '@/types';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
+
+interface CierreDraft {
+  fin: Record<string, string>;
+  dinero: { efectivo: string; datafono: string; nequi: string };
+}
 
 interface Props {
   evento: { nombre: string; fecha: string; responsable: string };
@@ -11,13 +16,23 @@ interface Props {
   recargas: { producto_id: string; cantidad: number }[];
   cortesias: { producto_id: string; cantidad: number }[];
   perdidas: { producto_id: string; cantidad: number }[];
+  draft: CierreDraft;
+  onDraftChange: (draft: CierreDraft) => void;
   onFinalizar: (inventarioFinal: Record<string, number>, dinero: { efectivo: number; datafono: number; nequi: number }) => void;
   onAtras: () => void;
 }
 
-export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, onFinalizar, onAtras }: Props) {
-  const [fin, setFin] = useState<Record<string, string>>({});
-  const [dinero, setDinero] = useState({ efectivo: '', datafono: '', nequi: '' });
+export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, draft, onDraftChange, onFinalizar, onAtras }: Props) {
+  const fin = draft.fin;
+  const dinero = draft.dinero;
+
+  const setFin = (updater: (prev: Record<string, string>) => Record<string, string>) => {
+    onDraftChange({ ...draft, fin: updater(draft.fin) });
+  };
+
+  const setDinero = (updater: (prev: typeof draft.dinero) => typeof draft.dinero) => {
+    onDraftChange({ ...draft, dinero: updater(draft.dinero) });
+  };
 
   const disponible = (id: string) => {
     const ini = inventarioInicial[id]?.cantidad ?? 0;

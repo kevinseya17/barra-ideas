@@ -3,18 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Evento, Gasto, Descuento } from '@/types';
 import { uid, nowTime, calcularResumen } from '@/utils/calculos';
 import * as api from '@/lib/api';
-import { Moon, Sun, Settings, BarChart3, RefreshCw, AlertTriangle, PackageOpen } from 'lucide-react';
+import { Moon, Sun, Settings, BarChart3, RefreshCw, AlertTriangle, PackageOpen, History } from 'lucide-react';
 import Apertura from '@/components/Apertura';
 import Operacion from '@/components/Operacion';
 import Cierre from '@/components/Cierre';
 import Reporte from '@/components/Reporte';
 import AdminPanel from '@/components/AdminPanel';
+import Historial from '@/components/Historial';
 
-type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin';
+type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin' | 'historial';
 const STEPS: Step[] = ['apertura', 'operacion', 'cierre', 'reporte'];
 const STEP_LABELS: Record<Step, string> = {
   apertura: '01 Apertura', operacion: '02 Operación', cierre: '03 Cierre', reporte: '04 Reporte', admin: '05 Admin'
 };
+
+interface CierreDraft {
+  fin: Record<string, string>;
+  dinero: { efectivo: string; datafono: string; nequi: string };
+}
 
 interface AppState {
   step: Step;
@@ -29,6 +35,7 @@ interface AppState {
   gastos: Gasto[];
   inventarioFinal: Record<string, number>;
   dinero: { efectivo: number; datafono: number; nequi: number };
+  cierreDraft: CierreDraft;
   log: LogEntry[];
   isDark: boolean;
 }
@@ -44,8 +51,9 @@ const INIT: AppState = {
   perdidas: [],
   descuentos: [],
   gastos: [],
-  inventarioFinal: {}, 
-  dinero: { efectivo: 0, datafono: 0, nequi: 0 }, 
+  inventarioFinal: {},
+  dinero: { efectivo: 0, datafono: 0, nequi: 0 },
+  cierreDraft: { fin: {}, dinero: { efectivo: '', datafono: '', nequi: '' } },
   log: [],
   isDark: true,
 };
@@ -545,6 +553,16 @@ export default function BarraProApp() {
                 </button>
 
                 <button 
+                  onClick={() => setState(s => ({ ...s, step: 'historial' }))} 
+                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
+                    state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'
+                  }`}
+                  title="Historial de Eventos"
+                >
+                  <History size={18} />
+                </button>
+
+                <button 
                   onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
                   className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
                     state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'
@@ -585,6 +603,16 @@ export default function BarraProApp() {
           {state.step === 'admin' && (
             <AdminPanel onAtras={() => setState(s => ({ ...s, step: 'apertura' }))} />
           )}
+          {state.step === 'historial' && (
+            <Historial
+              isDark={state.isDark}
+              onAtras={() => setState(s => ({ ...s, step: state.evento ? 'operacion' : 'apertura' }))}
+              onRetomarEvento={async (ev) => {
+                await rehydrateFromCloud(ev);
+                setState(s => ({ ...s, step: 'operacion' }));
+              }}
+            />
+          )}
           {state.step === 'operacion' && state.evento && (
             <Operacion
               evento={state.evento} productos={state.productos}
@@ -611,6 +639,8 @@ export default function BarraProApp() {
               evento={state.evento} productos={state.productos}
               inventarioInicial={state.inventarioInicial} recargas={state.recargas}
               cortesias={state.cortesias} perdidas={state.perdidas}
+              draft={state.cierreDraft}
+              onDraftChange={(draft) => setState(s => ({ ...s, cierreDraft: draft }))}
               onFinalizar={handleCierre}
               onAtras={() => setState(s => ({ ...s, step: 'operacion' }))}
             />

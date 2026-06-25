@@ -17,12 +17,13 @@ interface Props {
   invInicial: Record<string, { cantidad: number; proveedor: string }>;
   dinero: { efectivo: number; datafono: number; nequi: number };
   log: any[];
+  soloLectura?: boolean;
   onNuevoEvento: () => void;
   onSiguienteNoche: () => void;
   onAtras: () => void;
 }
 
-export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
+export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, soloLectura, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
   const totalVentas = resumen.reduce((a, b) => a + b.ingresoEsperado, 0);
   const totalDescuentos = resumen.reduce((a, b) => a + (b.valorDescontadoTotales || 0), 0);
   const totalCortesiasVenta = resumen.reduce((a, b) => a + (b.valorCortesiaTotales || 0), 0);
@@ -94,8 +95,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
             Exportar Informe CSV
           </Btn>
         </div>
-
-        {/* Botones de modo de cierre */}
+        {!soloLectura && (
         <div className="flex flex-col gap-3 shrink-0">
           <button
             onClick={onSiguienteNoche}
@@ -122,6 +122,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
             </div>
           </button>
         </div>
+        )}
       </div>
 
       {/* KPI Dashboard */}
