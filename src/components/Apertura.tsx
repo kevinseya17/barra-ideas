@@ -17,7 +17,9 @@ interface Props {
     evento: { nombre: string; fecha: string; responsable: string; caja_inicial: number },
     productos: Producto[],
     proveedores: string[],
-    invInicial: Record<string, { cantidad: number; proveedor: string }>
+    invInicial: Record<string, { cantidad: number; proveedor: string }>,
+    nombresBarras?: string[],
+    replicarInventario?: boolean
   ) => void;
   eventoInicial?: { nombre: string; fecha: string; responsable: string; caja_inicial: number } | null;
   productosIniciales?: Producto[];
@@ -45,6 +47,9 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
     }
     return {};
   });
+  const [usaVariasBarras, setUsaVariasBarras] = useState(false);
+  const [replicarInventario, setReplicarInventario] = useState(true);
+  const [barras, setBarras] = useState<string[]>(['Barra 1', 'Barra 2']);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
   const [eventosPasados, setEventosPasados] = useState<Evento[]>([]);
@@ -72,7 +77,7 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
         setProveedores(proveedoresIniciales);
       }
 
-      setEventosPasados(events.filter(e => e.estado === 'cerrado').slice(0, 5));
+      setEventosPasados(events.slice(0, 10)); // Mostrar los últimos 10 eventos (cualquier estado)
       setCargando(false);
     };
     init();
@@ -150,7 +155,9 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
       { ...form, caja_inicial: Number(form.caja_inicial || 0) }, 
       productos, 
       proveedores, 
-      invFinal
+      invFinal,
+      usaVariasBarras ? barras : undefined,
+      usaVariasBarras ? replicarInventario : undefined
     );
   };
 
@@ -161,13 +168,18 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
       const data = await api.getEventoData(eventoId);
       const invFinalMap: Record<string, { cantidad: string, proveedor: string }> = {};
       
-      // Mapear el inventario FINAL del evento pasado al INICIAL de este
-      data.inventario.filter(i => i.tipo === 'final').forEach(i => {
-        invFinalMap[i.producto_id] = { 
-          cantidad: String(i.cantidad), 
-          proveedor: i.proveedor || '' 
-        };
-      });
+      // Intentar cargar primero el inventario FINAL (si el evento está cerrado)
+      const finalItems = data.inventario.filter(i => i.tipo === 'final');
+      if (finalItems.length > 0) {
+        finalItems.forEach(i => {
+          invFinalMap[i.producto_id] = { cantidad: String(i.cantidad), proveedor: i.proveedor || '' };
+        });
+      } else {
+        // Si no hay final (evento abierto), cargamos el inicial
+        data.inventario.filter(i => i.tipo === 'inicial').forEach(i => {
+          invFinalMap[i.producto_id] = { cantidad: String(i.cantidad), proveedor: i.proveedor || '' };
+        });
+      }
 
       setFormInv(prev => ({ ...prev, ...invFinalMap }));
       
@@ -227,10 +239,10 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
                   disabled={cargandoPrevio}
                   className="w-full h-11 bg-white/5 border border-white/10 rounded-xl px-4 text-[10px] font-black text-white uppercase tracking-widest outline-none focus:border-[#00d2ff] transition-all appearance-none cursor-pointer"
                 >
-                  <option value="" className="bg-[#0a0a0a]">📦 Seguir noche anterior...</option>
+                  <option value="" className="bg-[#0a0a0a]">📦 Copiar Inventario de...</option>
                   {eventosPasados.map(ev => (
                     <option key={ev.id} value={ev.id} className="bg-[#0a0a0a]">
-                      {ev.fecha} - {ev.nombre}
+                      {ev.estado === 'abierto' ? '🟢' : '⚪'} {ev.nombre} ({ev.fecha})
                     </option>
                   ))}
                 </select>
@@ -267,6 +279,56 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
           <Field label="Caja inicial (opcional)">
             <input type="number" className={inputCls} value={form.caja_inicial} onChange={e => set('caja_inicial', e.target.value)} placeholder="$ 0" />
           </Field>
+        </div>
+
+        {/* Multi-barra setup */}
+        <div className="mt-8 pt-8 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Dividir en varias barras</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Crea sesiones independientes para cada punto de venta</p>
+            </div>
+            <button 
+              onClick={() => setUsaVariasBarras(!usaVariasBarras)}
+              className={`w-14 h-8 rounded-full transition-all relative ${usaVariasBarras ? 'bg-[#00d2ff]' : 'bg-slate-200'}`}
+            >
+              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${usaVariasBarras ? 'left-7' : 'left-1 shadow-sm'}`} />
+            </button>
+          </div>
+
+          {usaVariasBarras && (
+            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              {barras.map((b, i) => (
+                <div key={i} className="flex gap-2">
+                  <input 
+                    className={inputCls} 
+                    value={b} 
+                    onChange={e => setBarras(prev => prev.map((x, idx) => idx === i ? e.target.value : x))}
+                    placeholder={`Nombre de la barra ${i+1}`}
+                  />
+                  {barras.length > 1 && (
+                    <button onClick={() => setBarras(prev => prev.filter((_, idx) => idx !== i))} className="p-3 text-slate-300 hover:text-rose-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <Btn variant="ghost" size="sm" onClick={() => setBarras([...barras, `Barra ${barras.length + 1}`])}>+ Añadir otra barra</Btn>
+
+              <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Replicar inventario inicial</h4>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Todas las barras iniciarán con las cantidades de abajo</p>
+                </div>
+                <button 
+                  onClick={() => setReplicarInventario(!replicarInventario)}
+                  className={`w-12 h-6 rounded-full transition-all relative ${replicarInventario ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${replicarInventario ? 'left-7' : 'left-1 shadow-sm'}`} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 

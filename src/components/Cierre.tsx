@@ -1,8 +1,8 @@
-'use client';
-import React from 'react';
-import { Package } from 'lucide-react';
-import { Producto } from '@/types';
+import React, { useMemo } from 'react';
+import { Package, Calculator, TrendingUp, DollarSign, AlertCircle } from 'lucide-react';
+import { Producto, Descuento } from '@/types';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
+import { calcularResumen, fmt } from '@/utils/calculos';
 
 interface CierreDraft {
   fin: Record<string, string>;
@@ -16,13 +16,14 @@ interface Props {
   recargas: { producto_id: string; cantidad: number }[];
   cortesias: { producto_id: string; cantidad: number }[];
   perdidas: { producto_id: string; cantidad: number }[];
+  descuentos: Descuento[];
   draft: CierreDraft;
   onDraftChange: (draft: CierreDraft) => void;
   onFinalizar: (inventarioFinal: Record<string, number>, dinero: { efectivo: number; datafono: number; nequi: number }) => void;
   onAtras: () => void;
 }
 
-export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, draft, onDraftChange, onFinalizar, onAtras }: Props) {
+export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, descuentos, draft, onDraftChange, onFinalizar, onAtras }: Props) {
   const fin = draft.fin;
   const dinero = draft.dinero;
 
@@ -33,6 +34,27 @@ export default function Cierre({ evento, productos, inventarioInicial, recargas,
   const setDinero = (updater: (prev: typeof draft.dinero) => typeof draft.dinero) => {
     onDraftChange({ ...draft, dinero: updater(draft.dinero) });
   };
+
+  // CÁLCULO EN TIEMPO REAL
+  const resumen = useMemo(() => {
+    const invFinalTmp: Record<string, number> = {};
+    productos.forEach(p => {
+      invFinalTmp[p.id] = Number(fin[p.id] || 0);
+    });
+    return calcularResumen(
+      productos,
+      inventarioInicial,
+      recargas,
+      cortesias,
+      perdidas,
+      descuentos,
+      invFinalTmp
+    );
+  }, [productos, inventarioInicial, recargas, cortesias, perdidas, descuentos, fin]);
+
+  const esperadoVentas = resumen.reduce((a, b) => a + b.ingresoEsperado, 0);
+  const totalRecaudado = Number(dinero.efectivo || 0) + Number(dinero.datafono || 0) + Number(dinero.nequi || 0);
+  const diferencia = totalRecaudado - esperadoVentas;
 
   const disponible = (id: string) => {
     const ini = inventarioInicial[id]?.cantidad ?? 0;
@@ -56,6 +78,40 @@ export default function Cierre({ evento, productos, inventarioInicial, recargas,
         title="Cierre de Caja y Cuadre"
         sub="Ingrese el conteo físico final y el total de dinero recaudado para generar el informe."
       />
+
+      {/* Panel de Status en Tiempo Real */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card className="p-5 border-l-4 border-l-cyan-500 bg-cyan-50/30">
+          <div className="flex items-center gap-3 mb-2">
+            <TrendingUp size={16} className="text-cyan-600" />
+            <span className="text-[10px] font-black text-cyan-600 uppercase tracking-widest">Ventas Esperadas</span>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(esperadoVentas)}</p>
+          <p className="text-[10px] text-slate-400 font-bold mt-1">Calculado según inventario</p>
+        </Card>
+
+        <Card className="p-5 border-l-4 border-l-indigo-500 bg-indigo-50/30">
+          <div className="flex items-center gap-3 mb-2">
+            <DollarSign size={16} className="text-indigo-600" />
+            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Dinero en Caja</span>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(totalRecaudado)}</p>
+          <p className="text-[10px] text-slate-400 font-bold mt-1">Total ingresado abajo</p>
+        </Card>
+
+        <Card className={`p-5 border-l-4 transition-colors ${Math.abs(diferencia) < 100 ? 'border-l-emerald-500 bg-emerald-50/30' : 'border-l-rose-500 bg-rose-50/30'}`}>
+          <div className="flex items-center gap-3 mb-2">
+            {Math.abs(diferencia) < 100 ? <Calculator size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-rose-600" />}
+            <span className={`text-[10px] font-black uppercase tracking-widest ${Math.abs(diferencia) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>Diferencia (Cuadre)</span>
+          </div>
+          <p className={`text-2xl font-black ${Math.abs(diferencia) < 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
+            {diferencia > 0 ? '+' : ''}{fmt(diferencia)}
+          </p>
+          <p className={`text-[10px] font-bold mt-1 ${Math.abs(diferencia) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {Math.abs(diferencia) < 100 ? '✨ ¡Caja Cuadrada!' : '⚠️ Revisa el inventario'}
+          </p>
+        </Card>
+      </div>
 
       {/* Inventario final */}
       <Card className="p-8 mb-8">

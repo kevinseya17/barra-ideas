@@ -55,6 +55,15 @@ export async function getEventoActivo(): Promise<Evento | null> {
   }
 }
 
+export async function getEventosAbiertos(): Promise<Evento[]> {
+  const { data, error } = await supabase.from('eventos').select('*').eq('estado', 'abierto').order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching open events:', error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function getEventoData(eventoId: string) {
   const [recargas, cortesias, perdidas, descuentos, gastos, inventario] = await Promise.all([
     supabase.from('recargas').select('*').eq('evento_id', eventoId),

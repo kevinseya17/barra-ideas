@@ -10,6 +10,8 @@ import Cierre from '@/components/Cierre';
 import Reporte from '@/components/Reporte';
 import AdminPanel from '@/components/AdminPanel';
 import Historial from '@/components/Historial';
+import { Card } from '@/components/UI';
+import { ChevronRight, Plus } from 'lucide-react';
 
 type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin' | 'historial';
 const STEPS: Step[] = ['apertura', 'operacion', 'cierre', 'reporte'];
@@ -74,6 +76,8 @@ export default function BarraProApp() {
   const [state, setState] = useState<AppState>(INIT);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [openEvents, setOpenEvents] = useState<Evento[]>([]);
+  const [showSelector, setShowSelector] = useState(false);
   const stepIdx = STEPS.indexOf(state.step);
 
   // Monitor de Conexión
@@ -91,25 +95,39 @@ export default function BarraProApp() {
   // Cargar estado guardado al iniciar
   useEffect(() => {
     const init = async () => {
-      // 1. Intentar cargar de localStorage (rápido)
       const saved = loadState();
-      if (saved.step !== 'apertura' || saved.evento) {
-        setState(saved);
-      }
+      const openEvs = await api.getEventosAbiertos();
+      setOpenEvents(openEvs);
 
-      // 2. SIEMPRE verificar en la nube si hay un evento abierto (seguro)
-      const evActivo = await api.getEventoActivo();
-      if (evActivo) {
-        // Si el evento en la nube es distinto al de local o no hay local, rehidratar
-        if (!saved.evento || saved.evento.id !== evActivo.id) {
-          rehydrateFromCloud(evActivo);
+      // Si hay eventos pero ninguno coincide con el guardado, o es la primera vez, mostrar selector
+      if (openEvs.length > 0) {
+        const coincidencia = saved.evento ? openEvs.find(e => e.id === saved.evento?.id) : null;
+        
+        if (!coincidencia) {
+          // Si hay varios y ninguno coincide, forzar selección
+          if (openEvs.length > 1) {
+            setShowSelector(true);
+            setState(s => ({ ...INIT, isDark: saved.isDark }));
+          } else {
+            // Solo hay uno, usar ese directamente
+            rehydrateFromCloud(openEvs[0]);
+          }
+          return;
+        } else {
+          // Coincide, cargar el guardado (ya está en state por default o se cargará abajo)
+          setState(saved);
+          // Opcional: Re-sincronizar por si hubo cambios en la nube mientras estaba offline
+          rehydrateFromCloud(coincidencia);
         }
+      } else {
+        setState(saved);
       }
     };
     init();
   }, []);
 
   const rehydrateFromCloud = async (ev: Evento) => {
+    setIsSyncing(true);
     const [prods, provs, data] = await Promise.all([
       api.getProductos(),
       api.getProveedores(),
@@ -135,6 +153,7 @@ export default function BarraProApp() {
       gastos: data.gastos,
       log: [{ id: uid(), time: nowTime(), msg: '🔄 Estado restaurado desde la nube', tipo: 'info' }, ...s.log]
     }));
+    setIsSyncing(false);
   };
 
   // Guardar estado en localStorage cada vez que cambia
@@ -153,12 +172,59 @@ export default function BarraProApp() {
     eventoInfo: { nombre: string; fecha: string; responsable: string; caja_inicial: number },
     productos: Producto[],
     proveedores: string[],
-    invInicial: Record<string, { cantidad: number; proveedor: string }>
+    invInicial: Record<string, { cantidad: number; proveedor: string }>,
+    nombresBarras?: string[],
+    replicarInventario?: boolean
   ) => {
-    const ev = await api.createEvento(eventoInfo);
-    if (!ev) return alert('Error al conectar con la base de datos Supabase');
-    setState(s => ({ ...s, evento: ev, productos, proveedores, inventarioInicial: invInicial, step: 'operacion' }));
-    addLog(`✅ Evento "${ev.nombre}" abierto`, 'info');
+    setIsSyncing(true);
+    try {
+      if (nombresBarras && nombresBarras.length > 1) {
+        // CREACION MULTIPLE
+        const promesas = nombresBarras.map(nombreBarra => {
+          return api.createEvento({
+            ...eventoInfo,
+            nombre: `${eventoInfo.nombre} - ${nombreBarra}`
+          });
+        });
+
+        const creados = await Promise.all(promesas);
+        const validos = creados.filter((e): e is Evento => e !== null);
+        
+        if (validos.length === 0) return alert('Error al crear las barras.');
+
+        // REPLICAR INVENTARIO SI SE SOLICITÓ
+        if (replicarInventario && Object.keys(invInicial).length > 0) {
+          const saveProms = validos.map(ev => {
+            const items = Object.entries(invInicial).map(([producto_id, data]) => ({
+              evento_id: ev.id,
+              producto_id,
+              tipo: 'inicial' as const,
+              cantidad: data.cantidad,
+              proveedor: data.proveedor
+            }));
+            return api.saveInventarioBatch(items);
+          });
+          await Promise.all(saveProms);
+        }
+
+        const openEvs = await api.getEventosAbiertos();
+        setOpenEvents(openEvs);
+        setShowSelector(true);
+        setState(s => ({ ...s, step: 'apertura', evento: null }));
+        addLog(`✅ Se crearon ${validos.length} barras para el evento${replicarInventario ? ' con inventario replicado' : ''}`, 'info');
+      } else {
+        // CREACION INDIVIDUAL (Normal)
+        const ev = await api.createEvento(eventoInfo);
+        if (!ev) return alert('Error al conectar con la base de datos Supabase');
+        setState(s => ({ ...s, evento: ev, productos, proveedores, inventarioInicial: invInicial, step: 'operacion' }));
+        addLog(`✅ Evento "${ev.nombre}" abierto`, 'info');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error en la apertura del evento');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleSaveInicial = (inv: Record<string, { cantidad: number; proveedor: string }>) => {
@@ -562,6 +628,19 @@ export default function BarraProApp() {
                   <History size={18} />
                 </button>
 
+                {openEvents.length >= 1 && (
+                  <button 
+                    onClick={() => setShowSelector(true)} 
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:shadow-sm ${
+                      state.isDark ? 'text-cyan-400 hover:text-cyan-300 hover:bg-white/10' : 'text-cyan-500 hover:text-cyan-600 hover:bg-white border border-cyan-100'
+                    }`}
+                    title="Control de Barras"
+                  >
+                    <BarChart3 size={18} />
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Barras Activas</span>
+                  </button>
+                )}
+
                 <button 
                   onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
                   className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
@@ -590,7 +669,6 @@ export default function BarraProApp() {
                     <span className="text-[9px] font-black text-[#ff0099] uppercase tracking-widest leading-none mb-1">Activo</span>
                     <span className={`text-xs font-black tracking-tight ${state.isDark ? 'text-white' : 'text-slate-900'}`}>{state.evento.nombre}</span>
                   </div>
-                  <div className="w-2 h-2 rounded-full bg-[#00d2ff] animate-pulse shadow-[0_0_8px_#00d2ff]" />
                 </div>
               )}
             </div>
@@ -599,10 +677,25 @@ export default function BarraProApp() {
 
       <main className="max-w-[1600px] mx-auto p-6">
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-          {state.step === 'apertura' && <Apertura onContinuar={handleApertura} eventoInicial={state.evento} productosIniciales={state.productos.length > 0 ? state.productos : undefined} proveedoresIniciales={state.proveedores.length > 0 ? state.proveedores : undefined} invInicial={state.inventarioInicial} onAdmin={() => setState(s => ({ ...s, step: 'admin' }))} />}
+          
+          {/* 1. SECCIÓN DE APERTURA O SELECTOR INICIAL */}
+          {state.step === 'apertura' && !state.evento && (
+             <Apertura 
+               onContinuar={handleApertura} 
+               eventoInicial={state.evento} 
+               productosIniciales={state.productos.length > 0 ? state.productos : undefined} 
+               proveedoresIniciales={state.proveedores.length > 0 ? state.proveedores : undefined} 
+               invInicial={state.inventarioInicial} 
+               onAdmin={() => setState(s => ({ ...s, step: 'admin' }))} 
+             />
+          )}
+
+          {/* El selector de barras ya no se muestra inline para evitar duplicidad, solo como modal */}
+
           {state.step === 'admin' && (
             <AdminPanel onAtras={() => setState(s => ({ ...s, step: 'apertura' }))} />
           )}
+
           {state.step === 'historial' && (
             <Historial
               isDark={state.isDark}
@@ -639,6 +732,7 @@ export default function BarraProApp() {
               evento={state.evento} productos={state.productos}
               inventarioInicial={state.inventarioInicial} recargas={state.recargas}
               cortesias={state.cortesias} perdidas={state.perdidas}
+              descuentos={state.descuentos}
               draft={state.cierreDraft}
               onDraftChange={(draft) => setState(s => ({ ...s, cierreDraft: draft }))}
               onFinalizar={handleCierre}
@@ -665,6 +759,80 @@ export default function BarraProApp() {
           )}
         </div>
       </main>
+
+      {/* Selector de Barra (Emergente de Alta Visibilidad) */}
+      {showSelector && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-[#0a0a0a] w-full max-w-xl rounded-[3rem] border border-slate-200 dark:border-white/10 shadow-3xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-10 border-b border-slate-100 dark:border-white/5 bg-gradient-to-r from-[#00d2ff]/10 to-[#ff0099]/10 relative">
+              <button 
+                onClick={() => setShowSelector(false)}
+                className="absolute top-8 right-8 p-3 rounded-2xl bg-white/10 text-slate-400 hover:text-white transition-colors"
+              >
+                <Plus className="rotate-45" size={24} />
+              </button>
+              
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 rounded-[1.5rem] bg-white dark:bg-white/5 flex items-center justify-center text-[#00d2ff] shadow-xl">
+                  <BarChart3 size={32} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Cambiar de Barra</h3>
+                  <p className="text-xs text-cyan-600 dark:text-cyan-400 font-black uppercase tracking-[0.2em] mt-1">Selecciona la barra a la que quieres entrar</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-10 space-y-4 max-h-[60vh] overflow-y-auto">
+              {openEvents.length > 0 ? (
+                openEvents.map(ev => (
+                  <button
+                    key={ev.id}
+                    onClick={() => {
+                      setShowSelector(false);
+                      rehydrateFromCloud(ev);
+                    }}
+                    className={`w-full group p-8 rounded-[2.5rem] transition-all flex items-center justify-between border-2 ${
+                      state.isDark 
+                        ? 'bg-white/5 border-white/5 hover:border-[#00d2ff] hover:bg-white/10' 
+                        : 'bg-white border-slate-100 hover:border-[#00d2ff] shadow-sm hover:shadow-xl'
+                    }`}
+                  >
+                    <div className="text-left">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_cyan]" />
+                        <span className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.2em]">En curso</span>
+                      </div>
+                      <h4 className={`text-xl font-black transition-colors ${state.isDark ? 'text-white group-hover:text-[#00d2ff]' : 'text-slate-900 group-hover:text-[#00d2ff]'}`}>
+                        {ev.nombre}
+                      </h4>
+                      <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">{ev.responsable} · {ev.fecha}</p>
+                    </div>
+                    <div className="w-12 h-12 rounded-2xl bg-white dark:bg-white/5 flex items-center justify-center text-slate-300 group-hover:text-[#00d2ff] group-hover:bg-[#00d2ff]/10 transition-all border border-slate-100 dark:border-white/10 group-hover:border-[#00d2ff]/20 shadow-sm">
+                      <ChevronRight size={20} strokeWidth={3} />
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-center py-12">
+                   <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No hay otras barras abiertas</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  setShowSelector(false);
+                  setState(s => ({ ...s, step: 'apertura', evento: null }));
+                }}
+                className="w-full p-6 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-white/10 text-slate-400 hover:text-[#ff0099] hover:border-[#ff0099] hover:bg-[#ff0099]/5 transition-all text-center font-black uppercase tracking-[0.2em] text-xs"
+              >
+                + Crear Nueva Barra desde Cero
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       </div>
     </div>
   );

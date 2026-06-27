@@ -40,6 +40,8 @@ export default function Historial({ onAtras, onRetomarEvento, isDark }: Historia
   const [loading, setLoading] = useState(true);
   const [detalle, setDetalle] = useState<EventoDetalle | null>(null);
   const [loadingDetalle, setLoadingDetalle] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isConsolidated, setIsConsolidated] = useState(false);
 
   const cargarEventos = async () => {
     setLoading(true);
@@ -96,6 +98,80 @@ export default function Historial({ onAtras, onRetomarEvento, isDark }: Historia
     setLoadingDetalle(null);
   };
 
+  const consolidarSeleccionados = async () => {
+    if (selectedIds.length < 2) return;
+    setLoadingDetalle('consolidating');
+    
+    try {
+      const allData = await Promise.all(selectedIds.map(api.getEventoData));
+      const prods = await api.getProductos();
+      const todosCierres = await Promise.all(selectedIds.map(api.getCierreDinero));
+
+      // Objeto base para consolidar
+      const consolidado: EventoDetalle = {
+        evento: { 
+          id: 'consolidado', 
+          nombre: `CONSOLIDADO (${selectedIds.length} BARRAS)`, 
+          fecha: 'Varios', 
+          responsable: 'Admin', 
+          caja_inicial: 0, 
+          estado: 'cerrado' 
+        },
+        productos: prods,
+        recargas: [],
+        cortesias: [],
+        perdidas: [],
+        descuentos: [],
+        gastos: [],
+        inventarioInicial: {},
+        inventarioFinal: {},
+        dinero: { efectivo: 0, datafono: 0, nequi: 0 }
+      };
+
+      allData.forEach((data, idx) => {
+        consolidado.recargas.push(...data.recargas);
+        consolidado.cortesias.push(...data.cortesias);
+        consolidado.perdidas.push(...data.perdidas);
+        consolidado.descuentos.push(...data.descuentos);
+        consolidado.gastos.push(...data.gastos);
+        
+        // Sumar Inventarios
+        data.inventario.forEach(item => {
+          if (item.tipo === 'inicial') {
+            const current = consolidado.inventarioInicial[item.producto_id] || { cantidad: 0, proveedor: item.proveedor || '' };
+            consolidado.inventarioInicial[item.producto_id] = { 
+              cantidad: current.cantidad + item.cantidad, 
+              proveedor: current.proveedor 
+            };
+          } else {
+            const current = consolidado.inventarioFinal[item.producto_id] || 0;
+            consolidado.inventarioFinal[item.producto_id] = current + item.cantidad;
+          }
+        });
+
+        // Sumar Dinero
+        const cierre = todosCierres[idx];
+        if (cierre) {
+          consolidado.dinero.efectivo += cierre.efectivo;
+          consolidado.dinero.datafono += cierre.datafono;
+          consolidado.dinero.nequi += cierre.nequi;
+        }
+      });
+
+      setDetalle(consolidado);
+      setIsConsolidated(true);
+    } catch (err) {
+      console.error(err);
+      alert("Error al consolidar reportes");
+    } finally {
+      setLoadingDetalle(null);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
   // Si hay un detalle activo, mostrar el Reporte de ese evento
   if (detalle) {
     const resumen = calcularResumen(
@@ -131,7 +207,7 @@ export default function Historial({ onAtras, onRetomarEvento, isDark }: Historia
           log={[]}
           onNuevoEvento={() => setDetalle(null)}
           onSiguienteNoche={() => setDetalle(null)}
-          onAtras={() => setDetalle(null)}
+          onAtras={() => { setDetalle(null); setIsConsolidated(false); }}
           soloLectura
         />
       </div>
@@ -162,15 +238,27 @@ export default function Historial({ onAtras, onRetomarEvento, isDark }: Historia
             </p>
           </div>
         </div>
-        <button
-          onClick={cargarEventos}
-          className={`p-3 rounded-xl transition-colors ${
-            isDark ? 'text-[#00d2ff] hover:bg-white/10' : 'text-[#00d2ff] bg-white shadow-sm hover:bg-cyan-50'
-          }`}
-          title="Recargar"
-        >
-          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-3">
+          {selectedIds.length > 1 && (
+            <button
+              onClick={consolidarSeleccionados}
+              disabled={loadingDetalle === 'consolidating'}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white rounded-xl text-xs font-[1000] uppercase tracking-widest shadow-lg shadow-cyan-500/20 hover:scale-105 transition-all"
+            >
+              {loadingDetalle === 'consolidating' ? <Loader2 size={14} className="animate-spin" /> : <PackageCheck size={14} />}
+              Consolidar {selectedIds.length} Barras
+            </button>
+          )}
+          <button
+            onClick={cargarEventos}
+            className={`p-3 rounded-xl transition-colors ${
+              isDark ? 'text-[#00d2ff] hover:bg-white/10' : 'text-[#00d2ff] bg-white shadow-sm hover:bg-cyan-50'
+            }`}
+            title="Recargar"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -206,6 +294,16 @@ export default function Historial({ onAtras, onRetomarEvento, isDark }: Historia
                 }`}
               >
                 <div className="p-5 flex items-center gap-4">
+                  {/* Checkbox selección */}
+                  <div className="pl-2 flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 rounded-lg border-2 border-slate-200 dark:border-white/10 checked:bg-[#00d2ff] transition-all cursor-pointer"
+                      checked={selectedIds.includes(ev.id)}
+                      onChange={() => toggleSelection(ev.id)}
+                    />
+                  </div>
+
                   {/* Icono estado */}
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
                     isOpen
