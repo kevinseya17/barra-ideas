@@ -78,6 +78,13 @@ export default function BarraProApp() {
   const [isOnline, setIsOnline] = useState(true);
   const [openEvents, setOpenEvents] = useState<Evento[]>([]);
   const [showSelector, setShowSelector] = useState(false);
+  const [bodegaData, setBodegaData] = useState<{ id: string, nombre: string, inventario: any[], recargas?: any[], perdidas?: any[] } | null>(null);
+  const [consolidadoBarras, setConsolidadoBarras] = useState<{ nombre: string, ventas: number, caja: number, total: number }[]>([]);
+  // --- PIN BODEGA ---
+  const PIN_BODEGA = '1234'; // Cambia este PIN desde el Panel Admin → para tu hermano
+  const [pinModal, setPinModal] = useState<{ ev: Evento } | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
   const stepIdx = STEPS.indexOf(state.step);
 
   // Monitor de Conexión
@@ -153,6 +160,49 @@ export default function BarraProApp() {
       gastos: data.gastos,
       log: [{ id: uid(), time: nowTime(), msg: '🔄 Estado restaurado desde la nube', tipo: 'info' }, ...s.log]
     }));
+
+    // SI NO ES BODEGA, BUSCAR LA BODEGA ACTIVA PARA ESTE EVENTO
+    if (!ev.nombre.startsWith('BODEGA -')) {
+      const bName = `BODEGA - ${ev.nombre.split(' - ').slice(1).join(' - ') || ev.nombre}`;
+      const openEvs = await api.getEventosAbiertos();
+      const bEv = openEvs.find(e => e.nombre === bName || e.nombre.startsWith('BODEGA -'));
+      if (bEv) {
+        const bData = await api.getEventoData(bEv.id);
+        setBodegaData({ 
+          id: bEv.id, 
+          nombre: bEv.nombre, 
+          inventario: bData.inventario,
+          recargas: bData.recargas,
+          perdidas: bData.perdidas
+        });
+      }
+    } else {
+      setBodegaData(null);
+    }
+
+    // SI ES BODEGA, CALCULAR CONSOLIDADO DE BARRAS
+    if (ev.nombre.startsWith('BODEGA -')) {
+      const baseEventName = ev.nombre.replace('BODEGA - ', '');
+      const openEvs = await api.getEventosAbiertos();
+      const linkedBarras = openEvs.filter(e => e.nombre.includes(baseEventName) && !e.nombre.startsWith('BODEGA -'));
+      
+      const stats = await Promise.all(linkedBarras.map(async (lb) => {
+        const lbData = await api.getEventoData(lb.id);
+        const invInicialLB = Object.fromEntries(lbData.inventario.filter(i => i.tipo === 'inicial').map(i => [i.producto_id, { cantidad: i.cantidad, proveedor: i.proveedor }]));
+        const res = calcularResumen(prods, invInicialLB, lbData.recargas, lbData.cortesias, lbData.perdidas, lbData.descuentos, {});
+        const ventasProyectadas = res.reduce((sum, item) => sum + (item.consumo * (prods.find(p => p.id === item.id)?.precio || 0)), 0);
+        return { 
+          nombre: lb.nombre.split(' - ')[0], 
+          ventas: ventasProyectadas, 
+          caja: lbData.caja_inicial, 
+          total: ventasProyectadas + lb.caja_inicial 
+        };
+      }));
+      setConsolidadoBarras(stats);
+    } else {
+      setConsolidadoBarras([]);
+    }
+
     setIsSyncing(false);
   };
 
@@ -174,7 +224,8 @@ export default function BarraProApp() {
     proveedores: string[],
     invInicial: Record<string, { cantidad: number; proveedor: string }>,
     nombresBarras?: string[],
-    replicarInventario?: boolean
+    replicarInventario?: boolean,
+    usaBodega?: boolean
   ) => {
     setIsSyncing(true);
     try {
@@ -191,8 +242,31 @@ export default function BarraProApp() {
         const validos = creados.filter((e): e is Evento => e !== null);
         
         if (validos.length === 0) return alert('Error al crear las barras.');
+        
+        // 1. CREAR BODEGA SI SE SOLICITÓ
+        let bCreated: { id: string, nombre: string, inventario: any[] } | null = null;
+        if (usaBodega) {
+          const evBodega = await api.createEvento({
+            ...eventoInfo,
+            nombre: `BODEGA - ${eventoInfo.nombre}`,
+            caja_inicial: 0
+          });
+          if (evBodega) {
+            // Guardar inventario inicial SOLO en la bodega
+            const items = Object.entries(invInicial).map(([producto_id, data]) => ({
+              evento_id: evBodega.id,
+              producto_id,
+              tipo: 'inicial' as const,
+              cantidad: data.cantidad,
+              proveedor: data.proveedor
+            }));
+            await api.saveInventarioBatch(items);
+            const bD = await api.getEventoData(evBodega.id);
+            bCreated = { id: evBodega.id, nombre: evBodega.nombre, inventario: bD.inventario };
+          }
+        }
 
-        // REPLICAR INVENTARIO SI SE SOLICITÓ
+        // 2. REPLICAR INVENTARIO SI SE SOLICITÓ (Normalmente solo si NO hay bodega)
         if (replicarInventario && Object.keys(invInicial).length > 0) {
           const saveProms = validos.map(ev => {
             const items = Object.entries(invInicial).map(([producto_id, data]) => ({
@@ -211,13 +285,48 @@ export default function BarraProApp() {
         setOpenEvents(openEvs);
         setShowSelector(true);
         setState(s => ({ ...s, step: 'apertura', evento: null }));
-        addLog(`✅ Se crearon ${validos.length} barras para el evento${replicarInventario ? ' con inventario replicado' : ''}`, 'info');
+        addLog(`✅ Se crearon ${validos.length} barras ${usaBodega ? 'y una Bodega Central ' : ''}para el evento`, 'info');
       } else {
         // CREACION INDIVIDUAL (Normal)
+        
+        // 1. CREAR BODEGA PRIMERO SI SE SOLICITÓ
+        let bCreated: { id: string, nombre: string, inventario: any[] } | null = null;
+        if (usaBodega) {
+          const evBodega = await api.createEvento({
+            ...eventoInfo,
+            nombre: `BODEGA - ${eventoInfo.nombre}`,
+            caja_inicial: 0
+          });
+          if (evBodega) {
+            const items = Object.entries(invInicial).map(([producto_id, data]) => ({
+              evento_id: evBodega.id,
+              producto_id,
+              tipo: 'inicial' as const,
+              cantidad: data.cantidad,
+              proveedor: data.proveedor
+            }));
+            await api.saveInventarioBatch(items);
+            const bD = await api.getEventoData(evBodega.id);
+            bCreated = { id: evBodega.id, nombre: evBodega.nombre, inventario: bD.inventario };
+          }
+        }
+
         const ev = await api.createEvento(eventoInfo);
         if (!ev) return alert('Error al conectar con la base de datos Supabase');
-        setState(s => ({ ...s, evento: ev, productos, proveedores, inventarioInicial: invInicial, step: 'operacion' }));
-        addLog(`✅ Evento "${ev.nombre}" abierto`, 'info');
+        
+        // Si hay bodega, el inventario inicial de la barra debería ser 0
+        const itemsBarra = usaBodega ? [] : Object.entries(invInicial).map(([producto_id, data]) => ({
+          evento_id: ev.id,
+          producto_id,
+          tipo: 'inicial' as const,
+          cantidad: data.cantidad,
+          proveedor: data.proveedor
+        }));
+        if (itemsBarra.length > 0) await api.saveInventarioBatch(itemsBarra);
+
+        setBodegaData(bCreated);
+        setState(s => ({ ...s, evento: ev, productos, proveedores, inventarioInicial: usaBodega ? {} : invInicial, step: 'operacion' }));
+        addLog(`✅ Evento "${ev.nombre}" abierto ${usaBodega ? 'con Bodega vinculada' : ''}`, 'info');
       }
     } catch (err) {
       console.error(err);
@@ -408,9 +517,43 @@ export default function BarraProApp() {
     }));
   };
 
+  const handleTrasladoBodega = async (productoId: string, cantidad: number) => {
+    if (!bodegaData || !state.evento) return;
+    
+    // 1. Crear Recarga en la Barra Actual
+    await handleAddRecarga({
+      producto_id: productoId,
+      cantidad,
+      proveedor: 'BODEGA CENTRAL'
+    });
+
+    // 2. Crear "Pérdida" en la Bodega (Descuento de stock)
+    const time = nowTime();
+    await api.createPerdida({
+      id: uid(),
+      evento_id: bodegaData.id,
+      producto_id: productoId,
+      cantidad,
+      motivo: `Traslado a ${state.evento.nombre}`,
+      hora: time
+    });
+
+    // 3. Actualizar datos de bodega localmente
+    const bData = await api.getEventoData(bodegaData.id);
+    setBodegaData(prev => prev ? { 
+      ...prev, 
+      inventario: bData.inventario,
+      recargas: bData.recargas,
+      perdidas: bData.perdidas
+    } : null);
+    
+    addLog(`📦 Traslado exitoso: ${cantidad} de ${pName(productoId)} desde Bodega`, 'info');
+  };
+
   const handleCierre = async (
     inventarioFinal: Record<string, number>,
-    dinero: { efectivo: number; datafono: number; nequi: number }
+    dinero: { efectivo: number; datafono: number; nequi: number },
+    devolverABodega?: boolean
   ) => {
     if (!state.evento) return;
     setState(s => ({ ...s, inventarioFinal, dinero, step: 'reporte' }));
@@ -425,6 +568,28 @@ export default function BarraProApp() {
     await api.saveInventarioBatch(items);
     await api.createCierreDinero({ ...dinero, evento_id: state.evento.id });
     await api.closeEvento(state.evento.id);
+
+    // DEVOLVER A BODEGA SI SE SOLICITÓ
+    if (devolverABodega && bodegaData) {
+      const time = nowTime();
+      const itemsRetorno = Object.entries(inventarioFinal)
+        .filter(([_, cant]) => cant > 0)
+        .map(([prodId, cant]) => ({
+          id: uid(),
+          evento_id: bodegaData.id,
+          producto_id: prodId,
+          cantidad: cant,
+          proveedor: `RETORNO: ${state.evento!.nombre}`,
+          hora: time
+        }));
+      
+      // Procesar recargas de retorno en bodega
+      for (const item of itemsRetorno) {
+        await api.createRecarga(item);
+      }
+      
+      addLog(`🔄 ${itemsRetorno.length} productos devueltos a Bodega Central`, 'info');
+    }
   };
 
   const resumen = calcularResumen(
@@ -723,6 +888,9 @@ export default function BarraProApp() {
               onAddGasto={handleAddGasto}
               onRemoveLogEntry={handleRemoveLogEntry}
               onUpdateLogEntry={handleUpdateLogEntry}
+              onTrasladoBodega={handleTrasladoBodega}
+              bodegaData={bodegaData}
+              consolidadoBarras={consolidadoBarras.length > 0 ? consolidadoBarras : undefined}
               onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
               onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
             />
@@ -735,6 +903,7 @@ export default function BarraProApp() {
               descuentos={state.descuentos}
               draft={state.cierreDraft}
               onDraftChange={(draft) => setState(s => ({ ...s, cierreDraft: draft }))}
+              bodegaConectada={!!bodegaData}
               onFinalizar={handleCierre}
               onAtras={() => setState(s => ({ ...s, step: 'operacion' }))}
             />
@@ -790,7 +959,14 @@ export default function BarraProApp() {
                     key={ev.id}
                     onClick={() => {
                       setShowSelector(false);
-                      rehydrateFromCloud(ev);
+                      if (ev.nombre.startsWith('BODEGA -')) {
+                        // Pedir PIN antes de entrar a la Bodega
+                        setPinInput('');
+                        setPinError(false);
+                        setPinModal({ ev });
+                      } else {
+                        rehydrateFromCloud(ev);
+                      }
                     }}
                     className={`w-full group p-8 rounded-[2.5rem] transition-all flex items-center justify-between border-2 ${
                       state.isDark 
@@ -827,6 +1003,100 @@ export default function BarraProApp() {
                 className="w-full p-6 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-white/10 text-slate-400 hover:text-[#ff0099] hover:border-[#ff0099] hover:bg-[#ff0099]/5 transition-all text-center font-black uppercase tracking-[0.2em] text-xs"
               >
                 + Crear Nueva Barra desde Cero
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE PIN PARA BODEGA */}
+      {pinModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/90 backdrop-blur-lg animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0a0a0a] w-full max-w-sm rounded-[3rem] border border-slate-200 dark:border-white/10 shadow-3xl overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="p-8 bg-gradient-to-br from-slate-900 to-slate-800 relative">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl" />
+              <div className="relative flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 rounded-[1.5rem] bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <span className="text-3xl">🔐</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Acceso Restringido</h3>
+                  <p className="text-[10px] text-cyan-400 font-black uppercase tracking-widest mt-1">Bodega Central · Solo Administrador</p>
+                </div>
+              </div>
+            </div>
+
+            {/* PIN Input */}
+            <div className="p-8 flex flex-col items-center gap-6">
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest text-center">Ingresa el PIN de tu hermano para continuar</p>
+              
+              {/* Pantalla PIN estilo cajero */}
+              <div className="flex gap-3">
+                {[0,1,2,3].map(i => (
+                  <div key={i} className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-xl font-black transition-all ${
+                    pinInput.length > i 
+                      ? 'bg-slate-900 border-cyan-500 text-white' 
+                      : 'bg-slate-50 border-slate-200 text-transparent'
+                  }`}>
+                    ●
+                  </div>
+                ))}
+              </div>
+
+              {/* Teclado numérico */}
+              <div className="grid grid-cols-3 gap-3 w-full">
+                {['1','2','3','4','5','6','7','8','9','←','0','✓'].map(k => (
+                  <button
+                    key={k}
+                    onClick={() => {
+                      if (k === '←') {
+                        setPinInput(p => p.slice(0,-1));
+                        setPinError(false);
+                      } else if (k === '✓') {
+                        if (pinInput === PIN_BODEGA) {
+                          setPinModal(null);
+                          rehydrateFromCloud(pinModal.ev);
+                        } else {
+                          setPinError(true);
+                          setPinInput('');
+                        }
+                      } else if (pinInput.length < 4) {
+                        const next = pinInput + k;
+                        setPinInput(next);
+                        if (next.length === 4) {
+                          if (next === PIN_BODEGA) {
+                            setPinModal(null);
+                            rehydrateFromCloud(pinModal.ev);
+                          } else {
+                            setPinError(true);
+                            setTimeout(() => setPinInput(''), 600);
+                          }
+                        }
+                      }
+                    }}
+                    className={`h-14 rounded-2xl text-lg font-black transition-all active:scale-95 ${
+                      k === '✓' 
+                        ? 'bg-[#00d2ff] text-white shadow-lg shadow-cyan-200 hover:bg-cyan-400' 
+                        : k === '←'
+                          ? 'bg-rose-50 text-rose-500 hover:bg-rose-100'
+                          : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
+                    }`}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+
+              {pinError && (
+                <p className="text-rose-500 text-xs font-black uppercase tracking-widest animate-in fade-in">❌ PIN Incorrecto. Intenta de nuevo.</p>
+              )}
+
+              <button 
+                onClick={() => { setPinModal(null); setShowSelector(true); }}
+                className="text-xs text-slate-400 hover:text-slate-600 font-bold uppercase tracking-widest"
+              >
+                ← Cancelar
               </button>
             </div>
           </div>

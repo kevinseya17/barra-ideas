@@ -28,6 +28,9 @@ interface Props {
   onUpdateLogEntry: (logId: string, newData: Partial<Recarga & Cortesia & Perdida & Descuento & Gasto>) => void;
   onCierre: () => void;
   onAtras: () => void;
+  onTrasladoBodega?: (productoId: string, cantidad: number) => Promise<void>;
+  bodegaData?: { id: string, nombre: string, inventario: any[] } | null;
+  consolidadoBarras?: { nombre: string, ventas: number, caja: number, total: number }[];
 }
 
 const PIN_ADMIN = "1234";
@@ -45,6 +48,7 @@ const TIPO_LOG: Record<LogEntry['tipo'], string> = {
 export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
   onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onUpdateLogEntry, onCierre, onAtras,
+  onTrasladoBodega, bodegaData, consolidadoBarras
 }: Props) {
   const draftKey = useMemo(() => `barrapro_operacion_draft_${evento.nombre}_${evento.fecha}`, [evento.nombre, evento.fecha]);
   const persistentStorage = typeof window !== 'undefined' ? localStorage : null;
@@ -210,9 +214,16 @@ export default function Operacion({
   };
 
   const doGasto = () => {
-    if (!gas.concepto || !gas.monto) return;
     onAddGasto({ evento_id: '', concepto: gas.concepto, monto: Number(gas.monto), metodo: gas.metodo, hora: nowTime() });
     setGas({ concepto: '', monto: '', metodo: 'efectivo' });
+  };
+
+  const [cargandoTraslado, setCargandoTraslado] = useState<string | null>(null);
+  const doTraslado = async (prodId: string, cant: number) => {
+    if (!onTrasladoBodega || cant <= 0) return;
+    setCargandoTraslado(prodId);
+    await onTrasladoBodega(prodId, cant);
+    setCargandoTraslado(null);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
@@ -309,6 +320,53 @@ export default function Operacion({
               </button>
             ))}
           </div>
+
+          {/* TABLERO DE CONTROL GLOBAL (SOLO PARA BODEGA) */}
+          {evento.nombre.startsWith('BODEGA -') && consolidadoBarras && (
+            <div className="mb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-top-4 duration-700">
+              <div className="lg:col-span-4 bg-gradient-to-r from-slate-900 to-slate-800 p-8 rounded-[2.5rem] shadow-2xl border border-slate-700 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+                  <div>
+                    <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 text-[10px] font-black uppercase tracking-widest border border-cyan-500/30">Tablero Global del Evento</span>
+                    <h3 className="text-3xl font-black text-white mt-4 tracking-tighter">Resumen Consolidado</h3>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Monitoreo de todas las barras activas</p>
+                  </div>
+                  <div className="flex gap-6">
+                    <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Ventas Totales</p>
+                      <p className="text-2xl font-black text-[#00d2ff]">${consolidadoBarras.reduce((a, b) => a + b.ventas, 0).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/10">
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Efectivo en Red</p>
+                      <p className="text-2xl font-black text-emerald-400">${consolidadoBarras.reduce((a, b) => a + b.caja, 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                  {consolidadoBarras.map(b => (
+                    <div key={b.nombre} className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/50 flex flex-col gap-3 transition-all hover:bg-slate-800">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black text-white truncate w-32">{b.nombre}</span>
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Caja Actual</p>
+                          <p className="text-lg font-black text-white">${b.caja.toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Ventas</p>
+                          <p className="text-xs font-bold text-cyan-400">${b.ventas.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
             {tab === 'inventario' && (
@@ -505,6 +563,70 @@ export default function Operacion({
                 </div>
                 
                 <Btn variant="brand" icon={<RefreshCw size={16} />} onClick={doRecarga}>Confirmar Recarga</Btn>
+
+                {/* SECCIÓN DE BODEGA CENTRAL */}
+                {bodegaData && (
+                  <div className="mt-12 p-8 rounded-[2rem] bg-cyan-50/50 border border-cyan-100 shadow-inner animate-in fade-in zoom-in-95 duration-500">
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-md">
+                          <Package size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Bodega Central</h4>
+                          <p className="text-[9px] text-cyan-600 font-bold uppercase tracking-widest mt-0.5">Solicitar productos almacenados</p>
+                        </div>
+                      </div>
+                      <Badge color="brand">CONECTADO</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {productos.map(p => {
+                        // Calcular stock disponible en bodega (usando la data del prop)
+                        // Calcular stock disponible en bodega (usando la data del prop)
+                        const itemsBodega = bodegaData.inventario || [];
+                        const bIni = itemsBodega.filter(i => i.producto_id === p.id && i.tipo === 'inicial').reduce((a, b) => a + Number(b.cantidad), 0);
+                        
+                        const bRec = (bodegaData as any).recargas?.filter((r: any) => r.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                        const bPer = (bodegaData as any).perdidas?.filter((per: any) => per.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                        const bTotal = bIni + bRec - bPer;
+
+                        if (bTotal <= 0) return null;
+
+                        return (
+                          <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-cyan-100 shadow-sm group hover:border-[#00d2ff] transition-all">
+                            <div>
+                              <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{p.nombre}</p>
+                              <p className="text-[9px] text-slate-400 font-bold">DISPONIBLE: <span className="text-cyan-600">{bTotal}</span></p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="number" 
+                                id={`traslado_${p.id}`}
+                                className="w-14 h-8 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs font-black outline-none focus:border-[#00d2ff]" 
+                                placeholder="0"
+                              />
+                              <button 
+                                onClick={() => {
+                                  const input = document.getElementById(`traslado_${p.id}`) as HTMLInputElement;
+                                  const val = Number(input.value);
+                                  if (val > 0) {
+                                    doTraslado(p.id, val);
+                                    input.value = '';
+                                  }
+                                }}
+                                disabled={cargandoTraslado === p.id}
+                                className="p-2 rounded-lg bg-cyan-600 text-white hover:bg-[#ff0099] transition-all shadow-md active:scale-95 disabled:opacity-50"
+                              >
+                                {cargandoTraslado === p.id ? <RefreshCw size={14} className="animate-spin" /> : 'Pedir'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {recargas.length > 0 && (
                   <div className="mt-10 space-y-3 pt-8 border-t border-slate-100">

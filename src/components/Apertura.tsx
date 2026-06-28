@@ -19,7 +19,8 @@ interface Props {
     proveedores: string[],
     invInicial: Record<string, { cantidad: number; proveedor: string }>,
     nombresBarras?: string[],
-    replicarInventario?: boolean
+    replicarInventario?: boolean,
+    usaBodega?: boolean
   ) => void;
   eventoInicial?: { nombre: string; fecha: string; responsable: string; caja_inicial: number } | null;
   productosIniciales?: Producto[];
@@ -48,7 +49,8 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
     return {};
   });
   const [usaVariasBarras, setUsaVariasBarras] = useState(false);
-  const [replicarInventario, setReplicarInventario] = useState(true);
+  const [usaBodega, setUsaBodega] = useState(true);
+  const [replicarInventario, setReplicarInventario] = useState(false);
   const [barras, setBarras] = useState<string[]>(['Barra 1', 'Barra 2']);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
@@ -157,7 +159,8 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
       proveedores, 
       invFinal,
       usaVariasBarras ? barras : undefined,
-      usaVariasBarras ? replicarInventario : undefined
+      usaVariasBarras ? replicarInventario : undefined,
+      usaBodega
     );
   };
 
@@ -296,8 +299,31 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
             </button>
           </div>
 
+          {/* Opción de Bodega - SIEMPRE VISIBLE */}
+          <div className="p-5 rounded-3xl bg-cyan-500/5 border border-cyan-500/10 flex items-center justify-between shadow-inner mb-8">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-cyan-600">
+                <PackageOpen size={20} />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Incluir Bodega Central</h4>
+                <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">El inventario inicial se quedará en un evento "Maestro"</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                setUsaBodega(!usaBodega);
+                if (!usaBodega) setReplicarInventario(false);
+              }}
+              className={`w-12 h-6 rounded-full transition-all relative ${usaBodega ? 'bg-[#00d2ff]' : 'bg-slate-200'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${usaBodega ? 'left-7' : 'left-1 shadow-sm'}`} />
+            </button>
+          </div>
+
           {usaVariasBarras && (
-            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300 mb-6">
+
               {barras.map((b, i) => (
                 <div key={i} className="flex gap-2">
                   <input 
@@ -317,11 +343,14 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
 
               <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Replicar inventario inicial</h4>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Todas las barras iniciarán con las cantidades de abajo</p>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Cargar Inventario a todas las barras</h4>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Todas las barras iniciarán con las mismas cantidades (No recomendado con Bodega)</p>
                 </div>
                 <button 
-                  onClick={() => setReplicarInventario(!replicarInventario)}
+                  onClick={() => {
+                    setReplicarInventario(!replicarInventario);
+                    if (!replicarInventario) setUsaBodega(false);
+                  }}
                   className={`w-12 h-6 rounded-full transition-all relative ${replicarInventario ? 'bg-indigo-500' : 'bg-slate-200'}`}
                 >
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${replicarInventario ? 'left-7' : 'left-1 shadow-sm'}`} />

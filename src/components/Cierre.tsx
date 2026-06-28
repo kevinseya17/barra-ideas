@@ -19,11 +19,13 @@ interface Props {
   descuentos: Descuento[];
   draft: CierreDraft;
   onDraftChange: (draft: CierreDraft) => void;
-  onFinalizar: (inventarioFinal: Record<string, number>, dinero: { efectivo: number; datafono: number; nequi: number }) => void;
+  onFinalizar: (inventarioFinal: Record<string, number>, dinero: { efectivo: number; datafono: number; nequi: number }, devolverABodega?: boolean) => void;
   onAtras: () => void;
+  bodegaConectada?: boolean;
 }
 
-export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, descuentos, draft, onDraftChange, onFinalizar, onAtras }: Props) {
+export default function Cierre({ evento, productos, inventarioInicial, recargas, cortesias, perdidas, descuentos, draft, onDraftChange, onFinalizar, onAtras, bodegaConectada }: Props) {
+  const [devolverABodega, setDevolverABodega] = React.useState(true);
   const fin = draft.fin;
   const dinero = draft.dinero;
 
@@ -68,7 +70,7 @@ export default function Cierre({ evento, productos, inventarioInicial, recargas,
       efectivo: Number(dinero.efectivo || 0),
       datafono: Number(dinero.datafono || 0),
       nequi: Number(dinero.nequi || 0),
-    });
+    }, devolverABodega);
   };
 
   return (
@@ -182,6 +184,27 @@ export default function Cierre({ evento, productos, inventarioInicial, recargas,
           </Field>
         </div>
       </Card>
+
+      {/* Opción de Bodega */}
+      {bodegaConectada && (
+        <Card className="p-6 mb-8 bg-cyan-50/50 border border-cyan-100 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-md">
+              <Package size={20} />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Retorno de Inventario</h4>
+              <p className="text-[10px] text-cyan-600 font-bold uppercase tracking-widest mt-1">Los sobrantes volverán automáticamente a la Bodega Central</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setDevolverABodega(!devolverABodega)}
+            className={`w-14 h-8 rounded-full transition-all relative ${devolverABodega ? 'bg-[#00d2ff]' : 'bg-slate-200'}`}
+          >
+            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${devolverABodega ? 'left-7' : 'left-1 shadow-sm'}`} />
+          </button>
+        </Card>
+      )}
 
       <div className="flex items-center justify-between mt-10">
         <button onClick={onAtras} className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest flex items-center gap-2">
