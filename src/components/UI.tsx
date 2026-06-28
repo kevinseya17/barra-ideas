@@ -74,10 +74,10 @@ const badgeMap: Record<BadgeColor, string> = {
   magenta: 'bg-magenta-50 text-[#ff0099] border-magenta-100 dark:bg-pink-500/10 dark:text-pink-400 dark:border-pink-500/20',
 };
 
-export const Badge: React.FC<{ children: React.ReactNode; color?: BadgeColor }> = ({
-  children, color = 'slate'
+export const Badge: React.FC<{ children: React.ReactNode; color?: BadgeColor, className?: string }> = ({
+  children, color = 'slate', className = ''
 }) => (
-  <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${badgeMap[color]}`}>
+  <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider ${badgeMap[color]} ${className}`}>
     {children}
   </span>
 );
