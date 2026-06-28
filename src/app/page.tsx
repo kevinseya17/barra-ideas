@@ -11,6 +11,7 @@ import Cierre from '@/components/Cierre';
 import Reporte from '@/components/Reporte';
 import AdminPanel from '@/components/AdminPanel';
 import Historial from '@/components/Historial';
+import MonitorBarras from '@/components/MonitorBarras';
 import { Card } from '@/components/UI';
 import { ChevronRight, Plus } from 'lucide-react';
 
@@ -1013,30 +1014,46 @@ export default function BarraProApp() {
             />
           )}
           {state.step === 'operacion' && state.evento && (
-            <Operacion
-              evento={state.evento} productos={state.productos}
-              proveedores={state.proveedores}
-              inventarioInicial={state.inventarioInicial}
-              recargas={state.recargas} cortesias={state.cortesias}
-              perdidas={state.perdidas} 
-              descuentos={state.descuentos}
-              gastos={state.gastos}
-              log={state.log}
-              onSaveInicial={handleSaveInicial}
-              onAddRecarga={handleAddRecarga} onAddCortesia={handleAddCortesia}
-              onAddPerdida={handleAddPerdida}
-              onAddDescuento={handleAddDescuento}
-              onAddGasto={handleAddGasto}
-              onRemoveLogEntry={handleRemoveLogEntry}
-              onUpdateLogEntry={handleUpdateLogEntry}
-              onTrasladoBodega={handleTrasladoBodega}
-              bodegaData={bodegaData}
-              consolidadoBarras={consolidadoBarras.length > 0 ? consolidadoBarras : undefined}
-              otrasBarras={otrasBarras}
-              onTrasladoEntreBarra={handleTrasladoEntreBarra}
-              onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
-              onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
-            />
+            <>
+              {/* MONITOR CENTRAL — Solo visible para la Bodega */}
+              {state.evento.nombre.startsWith('BODEGA -') && (
+                <div className={`mb-8 p-8 rounded-[2.5rem] border-2 shadow-xl ${
+                  state.isDark
+                    ? 'bg-black/40 border-white/10 backdrop-blur-xl'
+                    : 'bg-white border-slate-100'
+                }`}>
+                  <MonitorBarras
+                    barEvents={openEvents.filter(e => !e.nombre.startsWith('BODEGA -') && e.id !== state.evento!.id)}
+                    productos={state.productos}
+                    isDark={state.isDark}
+                  />
+                </div>
+              )}
+              <Operacion
+                evento={state.evento} productos={state.productos}
+                proveedores={state.proveedores}
+                inventarioInicial={state.inventarioInicial}
+                recargas={state.recargas} cortesias={state.cortesias}
+                perdidas={state.perdidas} 
+                descuentos={state.descuentos}
+                gastos={state.gastos}
+                log={state.log}
+                onSaveInicial={handleSaveInicial}
+                onAddRecarga={handleAddRecarga} onAddCortesia={handleAddCortesia}
+                onAddPerdida={handleAddPerdida}
+                onAddDescuento={handleAddDescuento}
+                onAddGasto={handleAddGasto}
+                onRemoveLogEntry={handleRemoveLogEntry}
+                onUpdateLogEntry={handleUpdateLogEntry}
+                onTrasladoBodega={handleTrasladoBodega}
+                bodegaData={bodegaData}
+                consolidadoBarras={consolidadoBarras.length > 0 ? consolidadoBarras : undefined}
+                otrasBarras={otrasBarras}
+                onTrasladoEntreBarra={handleTrasladoEntreBarra}
+                onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
+                onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
+              />
+            </>
           )}
           {state.step === 'cierre' && state.evento && (
             <Cierre
