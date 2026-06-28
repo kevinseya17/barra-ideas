@@ -897,97 +897,6 @@ export default function BarraProApp() {
               ))}
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* GRUPO DE ESTADO */}
-              <div className={`flex items-center gap-2.5 px-4 py-2 rounded-2xl border transition-all shadow-sm ${
-                !isOnline ? (state.isDark ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-500') :
-                isSyncing ? (state.isDark ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-500') :
-                (state.isDark ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-cyan-50 border-cyan-200 text-cyan-600')
-              }`}>
-                {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : 
-                 !isOnline ? <AlertTriangle size={14} /> : 
-                 <div className={`w-1.5 h-1.5 rounded-full ${state.isDark ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 'bg-[#00d2ff] shadow-[0_0_8px_#00d2ff]'}`} />}
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {!isOnline ? 'Sin Conexión' : isSyncing ? 'Sincronizando' : 'Nube Segura'}
-                </span>
-              </div>
-
-              {/* GRUPO DE ACCIONES */}
-              <div className={`flex items-center gap-2 p-1 rounded-2xl border transition-all ${
-                state.isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100/80 border-slate-200'
-              }`}>
-                <button 
-                  onClick={() => {
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
-                    const downloadAnchorNode = document.createElement('a');
-                    downloadAnchorNode.setAttribute("href", dataStr);
-                    downloadAnchorNode.setAttribute("download", `backup_barrapro_${state.evento?.nombre || 'evento'}_${new Date().toISOString().split('T')[0]}.json`);
-                    document.body.appendChild(downloadAnchorNode);
-                    downloadAnchorNode.click();
-                    downloadAnchorNode.remove();
-                  }} 
-                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
-                    state.isDark ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-indigo-600 hover:bg-white'
-                  }`}
-                  title="Descargar copia de seguridad (Backup)"
-                >
-                  <PackageOpen size={18} />
-                </button>
-
-                <button 
-                  onClick={() => setState(s => ({ ...s, step: 'historial' }))} 
-                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
-                    state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'
-                  }`}
-                  title="Historial de Eventos"
-                >
-                  <History size={18} />
-                </button>
-
-                {openEvents.length >= 1 && (
-                  <button 
-                    onClick={() => setShowSelector(true)} 
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:shadow-sm ${
-                      state.isDark ? 'text-cyan-400 hover:text-cyan-300 hover:bg-white/10' : 'text-cyan-500 hover:text-cyan-600 hover:bg-white border border-cyan-100'
-                    }`}
-                    title="Control de Barras"
-                  >
-                    <BarChart3 size={18} />
-                    <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Barras Activas</span>
-                  </button>
-                )}
-
-                <button 
-                  onClick={() => setState(s => ({ ...s, step: 'admin' }))} 
-                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
-                    state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'
-                  }`}
-                  title="Configuración de Base de Datos"
-                >
-                  <Settings size={18} />
-                </button>
-
-                <button 
-                  onClick={toggleDark} 
-                  className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
-                    state.isDark ? 'text-white/70 hover:text-[#ff0099] hover:bg-white/10' : 'text-slate-400 hover:text-[#ff0099] hover:bg-white'
-                  }`}
-                >
-                  {state.isDark ? <Sun size={18} /> : <Moon size={18} />}
-                </button>
-              </div>
-
-              {state.evento && (
-                <div className={`hidden lg:flex items-center gap-3 px-5 py-2.5 rounded-2xl border shadow-sm shrink-0 ml-2 ${
-                  state.isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'
-                }`}>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-black text-[#ff0099] uppercase tracking-widest leading-none mb-1">Activo</span>
-                    <span className={`text-xs font-black tracking-tight ${state.isDark ? 'text-white' : 'text-slate-900'}`}>{state.evento.nombre}</span>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
       </nav>
 
@@ -1025,19 +934,28 @@ export default function BarraProApp() {
           {state.step === 'operacion' && state.evento && (
             <>
               {/* MONITOR CENTRAL — Solo visible para la Bodega */}
-              {state.evento.nombre.startsWith('BODEGA -') && (
-                <div className={`mb-8 p-8 rounded-[2.5rem] border-2 shadow-xl ${
-                  state.isDark
-                    ? 'bg-black/40 border-white/10 backdrop-blur-xl'
-                    : 'bg-white border-slate-100'
-                }`}>
-                  <MonitorBarras
-                    barEvents={openEvents.filter(e => !e.nombre.startsWith('BODEGA -') && e.id !== state.evento!.id)}
-                    productos={state.productos}
-                    isDark={state.isDark}
-                  />
-                </div>
-              )}
+              {state.evento.nombre.startsWith('BODEGA -') && (() => {
+                // Solo mostrar barras del MISMO evento base que la bodega
+                const baseName = state.evento.nombre.replace(/^BODEGA - /, '');
+                const barrasDelEvento = openEvents.filter(e =>
+                  !e.nombre.startsWith('BODEGA -') &&
+                  e.id !== state.evento!.id &&
+                  (e.nombre.includes(baseName) || e.nombre.replace(/ - Barra \d+$/, '') === baseName)
+                );
+                return (
+                  <div className={`mb-8 p-6 sm:p-8 rounded-[2.5rem] border-2 shadow-xl ${
+                    state.isDark
+                      ? 'bg-black/40 border-white/10 backdrop-blur-xl'
+                      : 'bg-white border-slate-100'
+                  }`}>
+                    <MonitorBarras
+                      barEvents={barrasDelEvento}
+                      productos={state.productos}
+                      isDark={state.isDark}
+                    />
+                  </div>
+                );
+              })()}
               <Operacion
                 evento={state.evento} productos={state.productos}
                 proveedores={state.proveedores}
