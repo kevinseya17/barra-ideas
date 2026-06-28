@@ -577,23 +577,26 @@ export default function BarraProApp() {
 
     // 2. Crear "Pérdida" en la Bodega (Descuento de stock)
     const time = nowTime();
-    await api.createPerdida({
+    const perdidaBodega: Perdida = {
       id: uid(),
       evento_id: bodegaData.id,
       producto_id: productoId,
       cantidad,
       motivo: `Traslado a ${state.evento.nombre}`,
       hora: time
+    };
+    
+    await api.createPerdida(perdidaBodega);
+
+    // 3. Actualizar datos de bodega localmente al instante
+    setBodegaData(prev => {
+      if (!prev) return null;
+      return { 
+        ...prev, 
+        perdidas: [perdidaBodega, ...(prev.perdidas || [])]
+      };
     });
 
-    // 3. Actualizar datos de bodega localmente
-    const bData = await api.getEventoData(bodegaData.id);
-    setBodegaData(prev => prev ? { 
-      ...prev, 
-      inventario: bData.inventario,
-      recargas: bData.recargas,
-      perdidas: bData.perdidas
-    } : null);
     
     addLog(`📦 Traslado exitoso: ${cantidad} de ${pName(productoId)} desde Bodega`, 'info');
   };
