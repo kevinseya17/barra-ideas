@@ -10,12 +10,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '', {
   global: {
     fetch: (url, options) => {
-      let finalUrl = url.toString();
-      if (finalUrl.includes('rest/v1/')) {
-        const separator = finalUrl.includes('?') ? '&' : '?';
-        finalUrl = `${finalUrl}${separator}_nocache=${Date.now()}`;
-      }
-      return fetch(finalUrl, { ...options, cache: 'no-store' });
+      return fetch(url.toString(), { ...options, cache: 'no-store' });
     }
   }
 });
