@@ -104,7 +104,13 @@ export default function BarraProApp() {
   // Monitor e hidratación automática de Bodega Central
   useEffect(() => {
     const loadBodega = async () => {
-      const bodegaEv = openEvents.find(e => e.nombre.startsWith('BODEGA -'));
+      if (!state.evento?.id) return;
+      
+      // Extrae el nombre base del evento actual (quitando ' - Barra X' si aplica)
+      const baseName = state.evento.nombre.replace(/ - Barra \d+$/, '');
+      const expectedBodegaName = `BODEGA - ${baseName}`;
+      
+      const bodegaEv = openEvents.find(e => e.nombre === expectedBodegaName);
       if (bodegaEv && state.evento?.id !== bodegaEv.id) {
         const bData = await api.getEventoData(bodegaEv.id);
         setBodegaData({
