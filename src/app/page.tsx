@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Evento, Gasto, Descuento } from '@/types';
 import { uid, nowTime, calcularResumen } from '@/utils/calculos';
 import * as api from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { Moon, Sun, Settings, BarChart3, RefreshCw, AlertTriangle, PackageOpen, History } from 'lucide-react';
 import Apertura from '@/components/Apertura';
 import Operacion from '@/components/Operacion';
@@ -98,6 +99,57 @@ export default function BarraProApp() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // 🔴 TIEMPO REAL — Supabase Realtime (evento activo)
+  useEffect(() => {
+    if (!state.evento?.id) return;
+    const eventoId = state.evento.id;
+
+    const channel = supabase
+      .channel(`realtime_evento_${eventoId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recargas', filter: `evento_id=eq.${eventoId}` }, async () => {
+        const data = await api.getEventoData(eventoId);
+        setState(s => ({ ...s, recargas: data.recargas }));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cortesias', filter: `evento_id=eq.${eventoId}` }, async () => {
+        const data = await api.getEventoData(eventoId);
+        setState(s => ({ ...s, cortesias: data.cortesias }));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${eventoId}` }, async () => {
+        const data = await api.getEventoData(eventoId);
+        setState(s => ({ ...s, perdidas: data.perdidas }));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_items', filter: `evento_id=eq.${eventoId}` }, async () => {
+        const data = await api.getEventoData(eventoId);
+        const invInicial = Object.fromEntries(
+          data.inventario.filter(i => i.tipo === 'inicial').map(i => [i.producto_id, { cantidad: i.cantidad, proveedor: i.proveedor }])
+        );
+        setState(s => ({ ...s, inventarioInicial: invInicial }));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [state.evento?.id]);
+
+  // 🔴 TIEMPO REAL — Actualizar stock de Bodega cuando cambia
+  useEffect(() => {
+    if (!bodegaData?.id) return;
+    const bodegaId = bodegaData.id;
+
+    const channelBodega = supabase
+      .channel(`realtime_bodega_${bodegaId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${bodegaId}` }, async () => {
+        const bData = await api.getEventoData(bodegaId);
+        setBodegaData(prev => prev ? { ...prev, inventario: bData.inventario, recargas: bData.recargas, perdidas: bData.perdidas } : null);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recargas', filter: `evento_id=eq.${bodegaId}` }, async () => {
+        const bData = await api.getEventoData(bodegaId);
+        setBodegaData(prev => prev ? { ...prev, inventario: bData.inventario, recargas: bData.recargas, perdidas: bData.perdidas } : null);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channelBodega); };
+  }, [bodegaData?.id]);
 
   // Cargar estado guardado al iniciar
   useEffect(() => {
