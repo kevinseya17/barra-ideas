@@ -81,6 +81,7 @@ export default function BarraProApp() {
   const [showSelector, setShowSelector] = useState(false);
   const [bodegaData, setBodegaData] = useState<{ id: string, nombre: string, inventario: any[], recargas?: any[], perdidas?: any[] } | null>(null);
   const [consolidadoBarras, setConsolidadoBarras] = useState<{ nombre: string, ventas: number, caja: number, total: number }[]>([]);
+  const otrasBarras = openEvents.filter(e => e.id !== state.evento?.id && !e.nombre.startsWith('BODEGA -'));
   // --- PIN BODEGA ---
   const PIN_BODEGA = '1234'; // Cambia este PIN desde el Panel Admin → para tu hermano
   const [pinModal, setPinModal] = useState<{ ev: Evento } | null>(null);
@@ -602,6 +603,40 @@ export default function BarraProApp() {
     addLog(`📦 Traslado exitoso: ${cantidad} de ${pName(productoId)} desde Bodega`, 'info');
   };
 
+  // Traslado entre barras (de la barra activa a otra barra)
+  const handleTrasladoEntreBarra = async (eventoDestinoId: string, productoId: string, cantidad: number) => {
+    if (!state.evento) return;
+    const time = nowTime();
+
+    // 1. Registrar pérdida en la barra de origen (esta barra)
+    const perdidaId = uid();
+    const destNombre = openEvents.find(e => e.id === eventoDestinoId)?.nombre || 'Otra Barra';
+    await api.createPerdida({
+      id: perdidaId,
+      evento_id: state.evento.id,
+      producto_id: productoId,
+      cantidad,
+      motivo: `Traslado enviado → ${destNombre}`,
+      hora: time
+    });
+    setState(s => ({
+      ...s,
+      perdidas: [{ id: perdidaId, evento_id: s.evento!.id, producto_id: productoId, cantidad, motivo: `Traslado enviado → ${destNombre}`, hora: time }, ...s.perdidas]
+    }));
+
+    // 2. Registrar recarga en la barra destino
+    await api.createRecarga({
+      id: uid(),
+      evento_id: eventoDestinoId,
+      producto_id: productoId,
+      cantidad,
+      proveedor: `Traslado desde ${state.evento.nombre}`,
+      hora: time
+    });
+
+    addLog(`🔄 Traslado enviado: ${cantidad} de ${pName(productoId)} → ${destNombre}`, 'info');
+  };
+
   const handleCierre = async (
     inventarioFinal: Record<string, number>,
     dinero: { efectivo: number; datafono: number; nequi: number },
@@ -943,6 +978,8 @@ export default function BarraProApp() {
               onTrasladoBodega={handleTrasladoBodega}
               bodegaData={bodegaData}
               consolidadoBarras={consolidadoBarras.length > 0 ? consolidadoBarras : undefined}
+              otrasBarras={otrasBarras}
+              onTrasladoEntreBarra={handleTrasladoEntreBarra}
               onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
               onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
             />

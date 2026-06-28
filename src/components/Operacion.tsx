@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, Percent, Banknote, Trash2, Pencil, ShieldCheck, ChevronDown } from 'lucide-react';
+import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, Percent, Banknote, Trash2, Pencil, ShieldCheck, ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from '@/types';
 import { nowTime } from '@/utils/calculos';
 import { Btn, Card, Field, inputCls, Badge, SectionHeader } from './UI';
@@ -31,6 +31,8 @@ interface Props {
   onTrasladoBodega?: (productoId: string, cantidad: number) => Promise<void>;
   bodegaData?: { id: string, nombre: string, inventario: any[] } | null;
   consolidadoBarras?: { nombre: string, ventas: number, caja: number, total: number }[];
+  otrasBarras?: { id: string, nombre: string }[];
+  onTrasladoEntreBarra?: (eventoDestinoId: string, productoId: string, cantidad: number) => Promise<void>;
 }
 
 const PIN_ADMIN = "1234";
@@ -48,7 +50,7 @@ const TIPO_LOG: Record<LogEntry['tipo'], string> = {
 export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
   onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onUpdateLogEntry, onCierre, onAtras,
-  onTrasladoBodega, bodegaData, consolidadoBarras
+  onTrasladoBodega, bodegaData, consolidadoBarras, otrasBarras, onTrasladoEntreBarra
 }: Props) {
   const draftKey = useMemo(() => `barrapro_operacion_draft_${evento.nombre}_${evento.fecha}`, [evento.nombre, evento.fecha]);
   const persistentStorage = typeof window !== 'undefined' ? localStorage : null;
@@ -619,6 +621,68 @@ export default function Operacion({
                                 className="p-2 rounded-lg bg-cyan-600 text-white hover:bg-[#ff0099] transition-all shadow-md active:scale-95 disabled:opacity-50"
                               >
                                 {cargandoTraslado === p.id ? <RefreshCw size={14} className="animate-spin" /> : 'Pedir'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* PANEL: Enviar a otra Barra */}
+                {otrasBarras && otrasBarras.length > 0 && onTrasladoEntreBarra && (
+                  <div className="mt-8 p-6 rounded-3xl bg-violet-50/50 border border-violet-100">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-xl bg-violet-500 flex items-center justify-center text-white">
+                        <ArrowLeftRight size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Enviar a otra Barra</h4>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Traslado directo entre barras</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {productos.map(p => {
+                        const stockBarra = (inventarioInicial[p.id]?.cantidad || 0)
+                          + recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0)
+                          - perdidas.filter(per => per.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                        if (stockBarra <= 0) return null;
+                        return (
+                          <div key={p.id} className="flex flex-col gap-2 p-3 bg-white rounded-2xl border border-violet-100">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-black text-slate-800">{p.nombre}</p>
+                              <span className="text-[9px] text-violet-600 font-bold">Stock: {stockBarra}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <select 
+                                id={`dest_barra_${p.id}`}
+                                className="flex-1 h-8 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold px-2 outline-none focus:border-violet-400"
+                              >
+                                {otrasBarras.map(b => (
+                                  <option key={b.id} value={b.id}>{b.nombre}</option>
+                                ))}
+                              </select>
+                              <input 
+                                type="number" 
+                                id={`cant_barra_${p.id}`}
+                                className="w-14 h-8 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs font-black outline-none focus:border-violet-400" 
+                                placeholder="0"
+                                min="1" max={stockBarra}
+                              />
+                              <button 
+                                onClick={async () => {
+                                  const destEl = document.getElementById(`dest_barra_${p.id}`) as HTMLSelectElement;
+                                  const cantEl = document.getElementById(`cant_barra_${p.id}`) as HTMLInputElement;
+                                  const val = Number(cantEl.value);
+                                  if (val > 0 && destEl.value) {
+                                    await onTrasladoEntreBarra(destEl.value, p.id, val);
+                                    cantEl.value = '';
+                                  }
+                                }}
+                                className="px-3 h-8 rounded-lg bg-violet-500 text-white text-[10px] font-black hover:bg-violet-600 transition-all active:scale-95"
+                              >
+                                Enviar
                               </button>
                             </div>
                           </div>
