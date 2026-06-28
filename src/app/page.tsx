@@ -126,7 +126,22 @@ export default function BarraProApp() {
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // POLING DE RESPALDO: Sincronización silenciosa cada 4 segundos para asegurar que NUNCA falle la UI
+    const syncInterval = setInterval(async () => {
+      const data = await api.getEventoData(eventoId);
+      setState(s => {
+        // Solo actualizamos si hay cambios reales en las longitudes (evitar re-renders masivos innecesarios)
+        if (s.recargas.length === data.recargas.length && s.perdidas.length === data.perdidas.length && s.cortesias.length === data.cortesias.length) {
+          return s;
+        }
+        return { ...s, recargas: data.recargas, perdidas: data.perdidas, cortesias: data.cortesias };
+      });
+    }, 4000);
+
+    return () => { 
+      supabase.removeChannel(channel); 
+      clearInterval(syncInterval);
+    };
   }, [state.evento?.id]);
 
   // 🔴 TIEMPO REAL — Actualizar stock de Bodega cuando cambia
@@ -144,7 +159,21 @@ export default function BarraProApp() {
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channelBodega); };
+    const syncBodegaInterval = setInterval(async () => {
+      const bData = await api.getEventoData(bodegaId);
+      setBodegaData(prev => {
+        if (!prev) return null;
+        if (prev.recargas?.length === bData.recargas.length && prev.perdidas?.length === bData.perdidas.length) {
+          return prev;
+        }
+        return { ...prev, inventario: bData.inventario, recargas: bData.recargas, perdidas: bData.perdidas };
+      });
+    }, 4000);
+
+    return () => { 
+      supabase.removeChannel(channelBodega);
+      clearInterval(syncBodegaInterval);
+    };
   }, [bodegaData?.id]);
 
   // Cargar estado guardado al iniciar
