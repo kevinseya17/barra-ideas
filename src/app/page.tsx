@@ -108,17 +108,14 @@ export default function BarraProApp() {
 
     const channel = supabase
       .channel(`realtime_evento_${eventoId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'recargas', filter: `evento_id=eq.${eventoId}` }, async () => {
-        const data = await api.getEventoData(eventoId);
-        setState(s => ({ ...s, recargas: data.recargas }));
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'recargas', filter: `evento_id=eq.${eventoId}` }, (payload) => {
+        setState(s => ({ ...s, recargas: [payload.new as Recarga, ...s.recargas] }));
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cortesias', filter: `evento_id=eq.${eventoId}` }, async () => {
-        const data = await api.getEventoData(eventoId);
-        setState(s => ({ ...s, cortesias: data.cortesias }));
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cortesias', filter: `evento_id=eq.${eventoId}` }, (payload) => {
+        setState(s => ({ ...s, cortesias: [payload.new as Cortesia, ...s.cortesias] }));
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${eventoId}` }, async () => {
-        const data = await api.getEventoData(eventoId);
-        setState(s => ({ ...s, perdidas: data.perdidas }));
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${eventoId}` }, (payload) => {
+        setState(s => ({ ...s, perdidas: [payload.new as Perdida, ...s.perdidas] }));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_items', filter: `evento_id=eq.${eventoId}` }, async () => {
         const data = await api.getEventoData(eventoId);
@@ -139,13 +136,11 @@ export default function BarraProApp() {
 
     const channelBodega = supabase
       .channel(`realtime_bodega_${bodegaId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${bodegaId}` }, async () => {
-        const bData = await api.getEventoData(bodegaId);
-        setBodegaData(prev => prev ? { ...prev, inventario: bData.inventario, recargas: bData.recargas, perdidas: bData.perdidas } : null);
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${bodegaId}` }, (payload) => {
+        setBodegaData(prev => prev ? { ...prev, perdidas: [payload.new as Perdida, ...(prev.perdidas || [])] } : null);
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'recargas', filter: `evento_id=eq.${bodegaId}` }, async () => {
-        const bData = await api.getEventoData(bodegaId);
-        setBodegaData(prev => prev ? { ...prev, inventario: bData.inventario, recargas: bData.recargas, perdidas: bData.perdidas } : null);
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'recargas', filter: `evento_id=eq.${bodegaId}` }, (payload) => {
+        setBodegaData(prev => prev ? { ...prev, recargas: [payload.new as Recarga, ...(prev.recargas || [])] } : null);
       })
       .subscribe();
 
