@@ -101,6 +101,27 @@ export default function BarraProApp() {
     };
   }, []);
 
+  // Monitor e hidratación automática de Bodega Central
+  useEffect(() => {
+    const loadBodega = async () => {
+      const bodegaEv = openEvents.find(e => e.nombre.startsWith('BODEGA -'));
+      if (bodegaEv && state.evento?.id !== bodegaEv.id) {
+        const bData = await api.getEventoData(bodegaEv.id);
+        setBodegaData({
+          id: bodegaEv.id,
+          nombre: bodegaEv.nombre,
+          inventario: bData.inventario,
+          recargas: bData.recargas,
+          perdidas: bData.perdidas
+        });
+      } else if (state.evento?.id === bodegaEv?.id) {
+        setBodegaData(null); // Si estoy en la bodega, no necesito bodegaData lateral
+      }
+    };
+    loadBodega();
+  }, [openEvents, state.evento?.id]);
+
+
   // 🔴 TIEMPO REAL — Supabase Realtime (evento activo)
   useEffect(() => {
     if (!state.evento?.id) return;
