@@ -366,6 +366,81 @@ export default function Operacion({
             </div>
           )}
 
+          {/* LA CÁMARA — Panel de movimientos de Bodega en tiempo real */}
+          {evento.nombre.startsWith('BODEGA -') && (() => {
+            const allProdIds = new Set([
+              ...Object.keys(inventarioInicial),
+              ...perdidas.map(p => p.producto_id),
+              ...recargas.map(r => r.producto_id),
+            ]);
+            const movs = Array.from(allProdIds).map(pid => {
+              const prod = productos.find(p => p.id === pid);
+              const inicial = inventarioInicial[pid]?.cantidad ?? 0;
+              const despachado = perdidas.filter(p => p.producto_id === pid).reduce((s, p) => s + Number(p.cantidad), 0);
+              const retornado = recargas.filter(r => r.producto_id === pid).reduce((s, r) => s + Number(r.cantidad), 0);
+              const stockActual = inicial - despachado + retornado;
+              return { pid, prod, inicial, despachado, retornado, stockActual };
+            }).filter(m => m.inicial > 0 || m.despachado > 0 || m.retornado > 0);
+
+            if (movs.length === 0) return null;
+
+            return (
+              <div className="mb-8 animate-in fade-in slide-in-from-top-2 duration-500">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600">
+                    <Package size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">La Cámara · Movimientos de Bodega</h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Despachos → Retornos → Stock actual en bodega</p>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-sm">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-900 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-white">Producto</th>
+                        <th className="px-3 py-3 text-center text-slate-400">Inicial</th>
+                        <th className="px-3 py-3 text-center text-rose-400">Despachado</th>
+                        <th className="px-3 py-3 text-center text-emerald-400">Retornado</th>
+                        <th className="px-3 py-3 text-center text-cyan-400">Stock Actual</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 bg-white">
+                      {movs.map(m => (
+                        <tr key={m.pid} className="hover:bg-slate-50 transition-colors group">
+                          <td className="px-4 py-3">
+                            <p className="font-black text-slate-800 uppercase tracking-tight truncate max-w-[140px]">{m.prod?.nombre || m.pid}</p>
+                            <p className="text-[9px] text-slate-400 font-bold mt-0.5">{m.prod?.categoria}</p>
+                          </td>
+                          <td className="px-3 py-3 text-center font-bold text-slate-500">{m.inicial}</td>
+                          <td className="px-3 py-3 text-center">
+                            <span className="inline-flex items-center gap-0.5 font-black text-rose-500">
+                              <span className="text-[9px]">-</span>{m.despachado}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className="inline-flex items-center gap-0.5 font-black text-emerald-600">
+                              <span className="text-[9px]">+</span>{m.retornado}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${
+                              m.stockActual > 0 ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100' : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {m.stockActual}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
             {tab === 'inventario' && (
               <Card className="p-8 lg:p-12 rounded-[2.5rem] border-2 border-slate-100 shadow-2xl">

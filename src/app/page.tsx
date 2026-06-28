@@ -81,7 +81,7 @@ export default function BarraProApp() {
   const [openEvents, setOpenEvents] = useState<Evento[]>([]);
   const [showSelector, setShowSelector] = useState(false);
   const [bodegaData, setBodegaData] = useState<{ id: string, nombre: string, inventario: any[], recargas?: any[], perdidas?: any[] } | null>(null);
-  const [consolidadoBarras, setConsolidadoBarras] = useState<{ nombre: string, ventas: number, caja: number, total: number }[]>([]);
+  const [consolidadoBarras, setConsolidadoBarras] = useState<{ nombre: string, nombreCompleto?: string, ventas: number, caja: number, total: number, efectivo?: number, datafono?: number, nequi?: number, cerrada?: boolean }[]>([]);
   const otrasBarras = openEvents.filter(e => e.id !== state.evento?.id && !e.nombre.startsWith('BODEGA -'));
   // --- PIN BODEGA ---
   const PIN_BODEGA = '1234'; // Cambia este PIN desde el Panel Admin → para tu hermano
@@ -137,13 +137,23 @@ export default function BarraProApp() {
     const channel = supabase
       .channel(`realtime_evento_${eventoId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'recargas', filter: `evento_id=eq.${eventoId}` }, (payload) => {
-        setState(s => ({ ...s, recargas: [payload.new as Recarga, ...s.recargas] }));
+        setState(s => {
+          // Evitar duplicado: el item ya fue añadido optimísticamente en handleAddRecarga
+          if (s.recargas.some(r => r.id === (payload.new as Recarga).id)) return s;
+          return { ...s, recargas: [payload.new as Recarga, ...s.recargas] };
+        });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cortesias', filter: `evento_id=eq.${eventoId}` }, (payload) => {
-        setState(s => ({ ...s, cortesias: [payload.new as Cortesia, ...s.cortesias] }));
+        setState(s => {
+          if (s.cortesias.some(c => c.id === (payload.new as Cortesia).id)) return s;
+          return { ...s, cortesias: [payload.new as Cortesia, ...s.cortesias] };
+        });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'perdidas', filter: `evento_id=eq.${eventoId}` }, (payload) => {
-        setState(s => ({ ...s, perdidas: [payload.new as Perdida, ...s.perdidas] }));
+        setState(s => {
+          if (s.perdidas.some(p => p.id === (payload.new as Perdida).id)) return s;
+          return { ...s, perdidas: [payload.new as Perdida, ...s.perdidas] };
+        });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_items', filter: `evento_id=eq.${eventoId}` }, async () => {
         const data = await api.getEventoData(eventoId);
@@ -292,15 +302,23 @@ export default function BarraProApp() {
       const linkedBarras = openEvs.filter(e => e.nombre.includes(baseEventName) && !e.nombre.startsWith('BODEGA -'));
       
       const stats = await Promise.all(linkedBarras.map(async (lb) => {
-        const lbData = await api.getEventoData(lb.id);
+        const [lbData, lbDinero] = await Promise.all([
+          api.getEventoData(lb.id),
+          api.getCierreDinero(lb.id)
+        ]);
         const invInicialLB = Object.fromEntries(lbData.inventario.filter(i => i.tipo === 'inicial').map(i => [i.producto_id, { cantidad: i.cantidad, proveedor: i.proveedor }]));
         const res = calcularResumen(prods, invInicialLB, lbData.recargas, lbData.cortesias, lbData.perdidas, lbData.descuentos, {});
         const ventasProyectadas = res.reduce((sum, item) => sum + (item.consumo * (prods.find(p => p.id === item.id)?.precio || 0)), 0);
         return { 
-          nombre: lb.nombre.split(' - ')[0], 
+          nombre: lb.nombre.split(' - ').slice(-1)[0] || lb.nombre,
+          nombreCompleto: lb.nombre,
           ventas: ventasProyectadas, 
           caja: lb.caja_inicial, 
-          total: ventasProyectadas + lb.caja_inicial 
+          total: ventasProyectadas + lb.caja_inicial,
+          efectivo: lbDinero?.efectivo ?? 0,
+          datafono: lbDinero?.datafono ?? 0,
+          nequi: lbDinero?.nequi ?? 0,
+          cerrada: lb.estado === 'cerrado',
         };
       }));
       setConsolidadoBarras(stats);
@@ -759,6 +777,34 @@ export default function BarraProApp() {
     deudas[r.proveedor] = (deudas[r.proveedor] || 0) + r.cantidad * prod.costo;
   });
 
+  // ─── BODEGA: detección y cálculo de movimientos ───────────────────────────
+  const esBodega = !!state.evento?.nombre.startsWith('BODEGA -');
+
+  // bodegaMovimientos: por producto, cuánto salió (despachos) y cuánto volvió (retornos)
+  // Usamos el estado PROPIO de la bodega (state.inventarioInicial, state.perdidas, state.recargas)
+  // cuando el evento activo ES la bodega.
+  const bodegaMovimientos: { producto_id: string; inicial: number; despachado: number; retornado: number; stockActual: number }[] = [];
+  if (esBodega) {
+    const allProdIds = new Set([
+      ...Object.keys(state.inventarioInicial),
+      ...state.perdidas.map(p => p.producto_id),
+      ...state.recargas.map(r => r.producto_id),
+    ]);
+    allProdIds.forEach(pid => {
+      const inicial = state.inventarioInicial[pid]?.cantidad ?? 0;
+      // pérdidas de bodega = despachos a barras
+      const despachado = state.perdidas
+        .filter(p => p.producto_id === pid)
+        .reduce((s, p) => s + Number(p.cantidad), 0);
+      // recargas de bodega = retornos de barras
+      const retornado = state.recargas
+        .filter(r => r.producto_id === pid)
+        .reduce((s, r) => s + Number(r.cantidad), 0);
+      const stockActual = inicial - despachado + retornado;
+      bodegaMovimientos.push({ producto_id: pid, inicial, despachado, retornado, stockActual });
+    });
+  }
+
   const handleSiguienteNoche = () => {
     // Convertir inventarioFinal (Record<string, number>) al formato de inventarioInicial
     const nuevoInvInicial: Record<string, { cantidad: number; proveedor: string }> = {};
@@ -991,6 +1037,9 @@ export default function BarraProApp() {
               draft={state.cierreDraft}
               onDraftChange={(draft) => setState(s => ({ ...s, cierreDraft: draft }))}
               bodegaConectada={!!bodegaData}
+              esBodega={esBodega}
+              bodegaMovimientos={esBodega ? bodegaMovimientos : undefined}
+              consolidadoBarras={esBodega && consolidadoBarras.length > 0 ? consolidadoBarras : undefined}
               onFinalizar={handleCierre}
               onAtras={() => setState(s => ({ ...s, step: 'operacion' }))}
             />
