@@ -842,48 +842,57 @@ export default function BarraProApp() {
         <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 blur-[100px] rounded-full -z-10 translate-y-1/2" />
 
         <nav className={`${state.isDark ? 'bg-black/90 border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)]' : 'bg-white/90 border-slate-200 shadow-sm'} backdrop-blur-xl border-b sticky top-0 z-40 transition-colors duration-500`}>
-          <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-4 shrink-0">
+          <div className="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-6">
+            {/* ROW 1: Logo + Acciones */}
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className={`w-14 h-14 rounded-2xl overflow-hidden bg-black border-2 ${state.isDark ? 'border-slate-700 shadow-[0_0_25px_rgba(0,210,255,0.4)]' : 'border-slate-200 shadow-md'} group hover:border-[#00d2ff] transition-all duration-500`}>
-                  <img 
-                    src="/logo.jpeg" 
-                    alt="ideas+I Logo" 
-                    className="w-full h-full object-cover transform group-hover:scale-125 transition-transform duration-700"
-                  />
+                <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-black border-2 ${state.isDark ? 'border-slate-700 shadow-[0_0_25px_rgba(0,210,255,0.4)]' : 'border-slate-200 shadow-md'} group hover:border-[#00d2ff] transition-all duration-500 shrink-0`}>
+                  <img src="/logo.jpeg" alt="ideas+I Logo" className="w-full h-full object-cover transform group-hover:scale-125 transition-transform duration-700" />
                 </div>
                 <div>
-                  <span className={`text-2xl font-[1000] tracking-tighter block leading-none ${state.isDark ? 'text-white' : 'text-slate-900'}`}>
+                  <span className={`text-xl sm:text-2xl font-[1000] tracking-tighter block leading-none ${state.isDark ? 'text-white' : 'text-slate-900'}`}>
                     ideas<span className="text-[#ff0099]">+</span>I
                   </span>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-[#00d2ff] shadow-[0_0_8px_#00d2ff]" />
-                      <span className="w-2 h-2 rounded-full bg-[#ff0099] shadow-[0_0_8px_#ff0099] animate-pulse" />
-                    </div>
-                    <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${state.isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Premium Management
-                    </p>
-                  </div>
+                  {state.evento && (
+                    <p className="text-[10px] font-black text-[#ff0099] uppercase tracking-widest truncate max-w-[140px] sm:max-w-xs lg:hidden">{state.evento.nombre}</p>
+                  )}
                 </div>
+              </div>
+
+              {/* Acciones (siempre visibles) */}
+              <div className={`flex items-center gap-1 p-1 rounded-2xl border transition-all ${
+                state.isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100/80 border-slate-200'
+              }`}>
+                <button onClick={() => { const d = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2)); const a = document.createElement('a'); a.href = d; a.download = `backup_${Date.now()}.json`; a.click(); }} className={`p-2.5 rounded-xl transition-all ${ state.isDark ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-indigo-600 hover:bg-white'}`} title="Backup"><PackageOpen size={16} /></button>
+                <button onClick={() => setState(s => ({ ...s, step: 'historial' }))} className={`p-2.5 rounded-xl transition-all ${ state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'}`} title="Historial"><History size={16} /></button>
+                {openEvents.length >= 1 && (
+                  <button onClick={() => setShowSelector(true)} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl transition-all ${ state.isDark ? 'text-cyan-400 hover:bg-white/10' : 'text-cyan-500 hover:bg-white border border-cyan-100'}`} title="Barras Activas">
+                    <BarChart3 size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Barras</span>
+                  </button>
+                )}
+                <button onClick={() => setState(s => ({ ...s, step: 'admin' }))} className={`p-2.5 rounded-xl transition-all ${ state.isDark ? 'text-white/70 hover:text-[#00d2ff] hover:bg-white/10' : 'text-slate-400 hover:text-[#00d2ff] hover:bg-white'}`} title="Admin"><Settings size={16} /></button>
+                <button onClick={toggleDark} className={`p-2.5 rounded-xl transition-all ${ state.isDark ? 'text-white/70 hover:text-[#ff0099] hover:bg-white/10' : 'text-slate-400 hover:text-[#ff0099] hover:bg-white'}`}>{state.isDark ? <Sun size={16} /> : <Moon size={16} />}</button>
               </div>
             </div>
 
-            <div className={`flex border p-1.5 rounded-2xl gap-1 overflow-x-auto backdrop-blur-sm ${state.isDark ? 'bg-black/50 border-white/10' : 'bg-slate-100/80 border-slate-200'}`}>
+            {/* ROW 2: Steps tabs (scrollable on mobile) */}
+            <div className={`flex border p-1 rounded-2xl gap-1 overflow-x-auto backdrop-blur-sm scrollbar-none ${state.isDark ? 'bg-black/50 border-white/10' : 'bg-slate-100/80 border-slate-200'}`}>
               {STEPS.map((s, i) => (
                 <button
                   key={s}
                   onClick={() => i <= stepIdx && setState(st => ({ ...st, step: s }))}
                   disabled={i > stepIdx}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${
+                  className={`flex-1 px-3 sm:px-5 py-2 rounded-xl text-[11px] font-black transition-all whitespace-nowrap ${
                     state.step === s 
-                    ? (state.isDark ? 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-[0_0_25px_rgba(0,210,255,0.4)] scale-110' : 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-lg scale-105')
+                    ? (state.isDark ? 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-[0_0_25px_rgba(0,210,255,0.4)]' : 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-lg')
                     : i < stepIdx 
                       ? (state.isDark ? 'text-white/70 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-white hover:text-cyan-600 shadow-sm')
-                      : (state.isDark ? 'text-white/30 cursor-not-allowed' : 'text-slate-400 cursor-not-allowed opacity-50')
+                      : (state.isDark ? 'text-white/20 cursor-not-allowed' : 'text-slate-300 cursor-not-allowed')
                   }`}
                 >
-                  {STEP_LABELS[s]}
+                  <span className="sm:hidden">{STEP_LABELS[s].split(' ')[0]}</span>
+                  <span className="hidden sm:inline">{STEP_LABELS[s]}</span>
                 </button>
               ))}
             </div>
@@ -982,7 +991,7 @@ export default function BarraProApp() {
           </div>
       </nav>
 
-      <main className="max-w-[1600px] mx-auto p-6">
+      <main className="max-w-[1600px] mx-auto px-3 py-4 sm:px-6 sm:py-6">
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
           
           {/* 1. SECCIÓN DE APERTURA O SELECTOR INICIAL */}

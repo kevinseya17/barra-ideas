@@ -96,3 +96,36 @@ input[type="number"] {
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+
+/* ===================== MOBILE IMPROVEMENTS ===================== */
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Prevent iOS zoom on form inputs */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Better tap targets */
+  button {
+    min-height: 40px;
+  }
+
+  /* Reduce blur effects on mobile for performance */
+  .backdrop-blur-xl {
+    backdrop-filter: blur(8px);
+  }
+
+  /* Remove heavy shadows on mobile */
+  .shadow-2xl {
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1) !important;
+  }
+}

@@ -245,13 +245,9 @@ export default function Operacion({
     <div className="w-full py-2">
       <div className="flex flex-col lg:flex-row lg:items-start gap-8">
 
-        {/* MAIN CONSOLE */}
-        <div className="flex-1 min-w-0">
-          <SectionHeader
-            step="02 OPERACIÓN"
-            title={evento.nombre}
-            sub={`${evento.responsable} · Registro de actividad en tiempo real`}
-          />
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <h2 className="text-lg sm:text-2xl font-black text-slate-900 uppercase tracking-tight mb-1">{evento.nombre}</h2>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">{evento.responsable} · En operación</p>
 
           {/* MONITOR EN VIVO - COMPACTO Y ELEGANTE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
@@ -299,21 +295,21 @@ export default function Operacion({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex bg-slate-100/50 border border-slate-200 p-1.5 rounded-2xl shadow-sm mb-8 gap-1.5 overflow-x-auto">
+          <div className="flex bg-slate-100/50 border border-slate-200 p-1.5 rounded-2xl shadow-sm mb-6 gap-1 overflow-x-auto scrollbar-none">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                className={`flex-shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-4 py-3 rounded-xl text-[11px] font-bold transition-all ${
                   tab === t.id 
                   ? 'bg-white text-[#00d2ff] shadow-md ring-1 ring-slate-200' 
                   : 'text-slate-500 hover:bg-white/50 hover:text-slate-700'
                 }`}
               >
-                <span className={`${tab === t.id ? 'text-[#00d2ff]' : 'text-slate-400'}`}>{t.icon}</span>
-                {t.label}
+                <span className={`shrink-0 ${tab === t.id ? 'text-[#00d2ff]' : 'text-slate-400'}`}>{t.icon}</span>
+                <span className="hidden sm:inline whitespace-nowrap">{t.label}</span>
                 {!!t.count && (
-                  <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                     tab === t.id ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500'
                   }`}>
                     {t.count}
@@ -942,8 +938,8 @@ export default function Operacion({
           </div>
         </div>
 
-        {/* ACTIVITY TIMELINE SIDEBAR */}
-        <div className="w-full lg:w-72 shrink-0">
+        {/* ACTIVITY TIMELINE SIDEBAR — hidden on mobile */}
+        <div className="hidden lg:block w-full lg:w-72 shrink-0">
           <Card className="p-6 sticky top-24 overflow-hidden">
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
             
