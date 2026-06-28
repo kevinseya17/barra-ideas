@@ -194,7 +194,7 @@ export default function BarraProApp() {
         return { 
           nombre: lb.nombre.split(' - ')[0], 
           ventas: ventasProyectadas, 
-          caja: lbData.caja_inicial, 
+          caja: lb.caja_inicial, 
           total: ventasProyectadas + lb.caja_inicial 
         };
       }));
