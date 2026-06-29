@@ -392,10 +392,20 @@ export default function Cierre({
         <div className="space-y-4">
           {productos.map(p => {
             const disp = disponible(p.id);
-            // Cálculo en tiempo real del valor vendido
+            // Cálculo en tiempo real del valor vendido (descontando cortesías, pérdidas y descuentos)
             const finVal = fin[p.id] !== undefined && fin[p.id] !== '' ? Number(fin[p.id]) : null;
-            const vendidoUnd = finVal !== null ? disp - finVal : null;
-            const vendidoValor = vendidoUnd !== null ? vendidoUnd * p.precio : null;
+            const consumoUnd = finVal !== null ? Math.max(0, disp - finVal) : null;
+
+            // Unidades que NO generan ingreso
+            const corUnd = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+            const perUnd = perdidas.filter(d => d.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+            const descUnd = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+            const descValor = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + Number((b as any).valor_descontado || 0), 0);
+
+            const vendidoUnd = consumoUnd !== null ? Math.max(0, consumoUnd - corUnd - perUnd - descUnd) : null;
+            const vendidoValor = vendidoUnd !== null
+              ? (vendidoUnd * p.precio) + (descUnd * p.precio) - descValor
+              : null;
             return (
               <div key={p.id} className="p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-cyan-200 transition-all group">
                 <div className="flex items-center gap-6">
