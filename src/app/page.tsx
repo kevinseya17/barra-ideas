@@ -710,6 +710,40 @@ export default function BarraProApp() {
     addLog(`🔄 Traslado enviado: ${cantidad} de ${pName(productoId)} → ${destNombre}`, 'info');
   };
 
+  // Recibir de otra barra (la barra activa solicita producto de otra barra)
+  const handleRecibirDeOtraBarra = async (eventoOrigenId: string, productoId: string, cantidad: number) => {
+    if (!state.evento) return;
+    const time = nowTime();
+    const origenNombre = openEvents.find(e => e.id === eventoOrigenId)?.nombre || 'Otra Barra';
+
+    // 1. Registrar pérdida en la barra de origen (la que entrega)
+    await api.createPerdida({
+      id: uid(),
+      evento_id: eventoOrigenId,
+      producto_id: productoId,
+      cantidad,
+      motivo: `Traslado enviado → ${state.evento.nombre}`,
+      hora: time
+    });
+
+    // 2. Registrar recarga en esta barra (la que recibe) — con update optimista
+    const recargaId = uid();
+    await api.createRecarga({
+      id: recargaId,
+      evento_id: state.evento.id,
+      producto_id: productoId,
+      cantidad,
+      proveedor: `Traslado desde ${origenNombre}`,
+      hora: time
+    });
+    setState(s => ({
+      ...s,
+      recargas: [{ id: recargaId, evento_id: s.evento!.id, producto_id: productoId, cantidad, proveedor: `Traslado desde ${origenNombre}`, hora: time }, ...s.recargas]
+    }));
+
+    addLog(`📥 Recibido: ${cantidad} de ${pName(productoId)} ← ${origenNombre}`, 'info');
+  };
+
   const handleCierre = async (
     inventarioFinal: Record<string, number>,
     dinero: { efectivo: number; datafono: number; nequi: number },
@@ -1023,6 +1057,7 @@ export default function BarraProApp() {
                 consolidadoBarras={consolidadoBarras.length > 0 ? consolidadoBarras : undefined}
                 otrasBarras={otrasBarras}
                 onTrasladoEntreBarra={handleTrasladoEntreBarra}
+                onRecibirDeOtraBarra={handleRecibirDeOtraBarra}
                 onCierre={() => setState(s => ({ ...s, step: 'cierre' }))}
                 onAtras={() => setState(s => ({ ...s, step: 'apertura' }))}
               />

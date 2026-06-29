@@ -33,6 +33,7 @@ interface Props {
   consolidadoBarras?: { nombre: string, ventas: number, caja: number, total: number }[];
   otrasBarras?: { id: string, nombre: string }[];
   onTrasladoEntreBarra?: (eventoDestinoId: string, productoId: string, cantidad: number) => Promise<void>;
+  onRecibirDeOtraBarra?: (eventoOrigenId: string, productoId: string, cantidad: number) => Promise<void>;
 }
 
 const PIN_ADMIN = "1234";
@@ -50,7 +51,7 @@ const TIPO_LOG: Record<LogEntry['tipo'], string> = {
 export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
   onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onUpdateLogEntry, onCierre, onAtras,
-  onTrasladoBodega, bodegaData, consolidadoBarras, otrasBarras, onTrasladoEntreBarra
+  onTrasladoBodega, bodegaData, consolidadoBarras, otrasBarras, onTrasladoEntreBarra, onRecibirDeOtraBarra
 }: Props) {
   const draftKey = useMemo(() => `barrapro_operacion_draft_${evento.nombre}_${evento.fecha}`, [evento.nombre, evento.fecha]);
   const persistentStorage = typeof window !== 'undefined' ? localStorage : null;
@@ -759,6 +760,59 @@ export default function Operacion({
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* RECIBIR DE OTRA BARRA */}
+                {otrasBarras && otrasBarras.length > 0 && onRecibirDeOtraBarra && (
+                  <div className="mt-4 p-6 rounded-3xl bg-emerald-50/50 border border-emerald-100">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center text-white">
+                        <ArrowLeftRight size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Recibir de otra Barra</h4>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Solicitar producto que tiene otra barra</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {productos.map(p => (
+                        <div key={p.id} className="flex flex-col gap-2 p-3 bg-white rounded-2xl border border-emerald-100">
+                          <p className="text-xs font-black text-slate-800">{p.nombre}</p>
+                          <div className="flex gap-2">
+                            <select
+                              id={`origen_barra_${p.id}`}
+                              className="flex-1 h-8 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold px-2 outline-none focus:border-emerald-400"
+                            >
+                              {otrasBarras.map(b => (
+                                <option key={b.id} value={b.id}>{b.nombre.split(' - ').slice(-1)[0] || b.nombre}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="number"
+                              id={`cant_recibir_${p.id}`}
+                              className="w-14 h-8 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs font-black outline-none focus:border-emerald-400"
+                              placeholder="0"
+                              min="1"
+                            />
+                            <button
+                              onClick={async () => {
+                                const origenEl = document.getElementById(`origen_barra_${p.id}`) as HTMLSelectElement;
+                                const cantEl = document.getElementById(`cant_recibir_${p.id}`) as HTMLInputElement;
+                                const val = Number(cantEl.value);
+                                if (val > 0 && origenEl.value) {
+                                  await onRecibirDeOtraBarra(origenEl.value, p.id, val);
+                                  cantEl.value = '';
+                                }
+                              }}
+                              className="px-3 h-8 rounded-lg bg-emerald-500 text-white text-[10px] font-black hover:bg-emerald-600 transition-all active:scale-95"
+                            >
+                              Recibir
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
