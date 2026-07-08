@@ -282,6 +282,10 @@ export default function BarraProApp() {
       perdidas: data.perdidas,
       descuentos: data.descuentos,
       gastos: data.gastos,
+      // ⚠️ Reiniciar dinero y conteo final al cambiar de barra
+      // para que Barra 2 no herede los valores de Barra 1
+      dinero: { efectivo: 0, datafono: 0, nequi: 0 },
+      inventarioFinal: {},
       log: [{ id: uid(), time: nowTime(), msg: '🔄 Estado restaurado desde la nube', tipo: 'info' }, ...s.log]
     }));
 
