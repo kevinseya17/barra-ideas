@@ -129,3 +129,4 @@ input[type="number"] {
     box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1) !important;
   }
 }
+/* -- PRINT STYLES (Imprimir / PDF) ----------------------------------- */@media print {  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }  body { background: white !important; font-size: 12px; }  .print\:hidden { display: none !important; }  nav, aside, footer { display: none !important; }  .shadow-lg, .shadow-sm, .shadow-md, .shadow-2xl { box-shadow: none !important; }  @page { margin: 1.5cm; }  h1, h2, h3 { page-break-after: avoid; }  table { page-break-inside: auto; }  tr { page-break-inside: avoid; page-break-after: auto; }}

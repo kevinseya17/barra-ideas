@@ -1,9 +1,10 @@
 'use client';
 import React from 'react';
-import { Download, RefreshCw, TrendingUp, TrendingDown, DollarSign, Package, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Banknote, FileText } from 'lucide-react';
+import { Download, RefreshCw, TrendingUp, TrendingDown, DollarSign, Package, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Banknote, FileText, Printer } from 'lucide-react';
 import { ResumenProducto } from '@/types';
 import { fmt, exportarExcel, exportarPDF, exportarExcelSimple } from '@/utils/calculos';
 import { Btn, Card, Stat, Badge, catColor, SectionHeader } from './UI';
+import Dashboard from './Dashboard';
 
 interface Props {
   evento: { nombre: string; fecha: string; responsable: string; caja_inicial?: number };
@@ -18,12 +19,13 @@ interface Props {
   dinero: { efectivo: number; datafono: number; nequi: number };
   log: any[];
   soloLectura?: boolean;
+  consolidadoBarras?: { nombre: string; ventas: number; caja: number }[];
   onNuevoEvento: () => void;
   onSiguienteNoche: () => void;
   onAtras: () => void;
 }
 
-export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, soloLectura, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
+export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, soloLectura, consolidadoBarras, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
   const totalVentas = resumen.reduce((a, b) => a + b.ingresoEsperado, 0);
   const totalDescuentos = resumen.reduce((a, b) => a + (b.valorDescontadoTotales || 0), 0);
   const totalCortesiasVenta = resumen.reduce((a, b) => a + (b.valorCortesiaTotales || 0), 0);
@@ -87,9 +89,12 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
           title={evento.nombre}
           sub={`${evento.fecha} · Responsable: ${evento.responsable}`}
         />
-        <div className="flex gap-3 shrink-0 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex gap-3 shrink-0 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm print:hidden">
           <Btn variant="ghost" icon={<ArrowLeft size={16} />} onClick={onAtras}>
             Corregir Auditoría
+          </Btn>
+          <Btn variant="ghost" icon={<Printer size={16} />} onClick={() => window.print()}>
+            Imprimir / PDF
           </Btn>
           <Btn variant="brand" icon={<Download size={16} />} onClick={doExport}>
             Exportar Informe CSV
@@ -536,6 +541,18 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
           </div>
         </Card>
       </div>
+
+      {/* ── DASHBOARD DE ESTADÍSTICAS ── */}
+      <Dashboard
+        productos={productos}
+        recargas={recargas}
+        cortesias={cortesias}
+        perdidas={perdidas}
+        descuentos={descuentos}
+        inventarioInicial={invInicial}
+        dinero={dinero}
+        consolidadoBarras={consolidadoBarras}
+      />
     </div>
   );
 }

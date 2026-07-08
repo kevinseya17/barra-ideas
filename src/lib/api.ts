@@ -8,10 +8,41 @@ export async function getProductos(): Promise<Producto[]> {
     console.error('Error fetching productos:', error.message, error.code);
     return [];
   }
-  return data || [];
+  // Filtrar productos inactivos
+  const activos = (data || []).filter(p => p.activo !== false);
+  
+  // Deduplicar por nombre (case-insensitive): si hay dos "ABSOLUT", quedarse con
+  // el que tiene precio > 0, o el primero encontrado.
+  const vistos = new Map<string, Producto>();
+  for (const p of activos) {
+    const clave = p.nombre.trim().toLowerCase();
+    if (!vistos.has(clave)) {
+      vistos.set(clave, p);
+    } else {
+      // Preferir el que tiene precio definido sobre el que tiene precio 0
+      const actual = vistos.get(clave)!;
+      if (p.precio > 0 && actual.precio === 0) {
+        vistos.set(clave, p);
+      }
+    }
+  }
+  return Array.from(vistos.values());
 }
 
 export async function createProducto(prod: Omit<Producto, 'id'>): Promise<Producto | null> {
+  // Anti-duplicado: verificar si ya existe un producto con el mismo nombre (case-insensitive)
+  const { data: existing } = await supabase
+    .from('productos')
+    .select('id, nombre')
+    .ilike('nombre', prod.nombre.trim())
+    .eq('activo', true)
+    .limit(1);
+  
+  if (existing && existing.length > 0) {
+    console.warn(`⚠️ Producto "${prod.nombre}" ya existe (id: ${existing[0].id}). No se creará duplicado.`);
+    return existing[0] as Producto;
+  }
+
   const { data, error } = await supabase.from('productos').insert([prod]).select().single();
   if (error) {
     console.error('Error creating producto:', error);
@@ -56,7 +87,8 @@ export async function getEventoActivo(): Promise<Evento | null> {
 }
 
 export async function getEventosAbiertos(): Promise<Evento[]> {
-  const { data, error } = await supabase.from('eventos').select('*').eq('estado', 'abierto').order('created_at', { ascending: false });
+  // Incluye events 'abierto' Y 'congelado' para que las barras congeladas sigan apareciendo en el selector
+  const { data, error } = await supabase.from('eventos').select('*').in('estado', ['abierto', 'congelado']).order('created_at', { ascending: false });
   if (error) {
     console.error('Error fetching open events:', error);
     return [];

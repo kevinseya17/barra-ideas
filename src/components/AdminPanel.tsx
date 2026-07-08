@@ -1,11 +1,19 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Settings, Package, Truck, Calendar as CalendarIcon, Edit2, Trash2, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Settings, Package, Truck, Calendar as CalendarIcon, Edit2, Trash2, ArrowLeft, RefreshCw, Bell } from 'lucide-react';
 import { Producto, Evento } from '@/types';
 import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge } from './UI';
 
-type Tab = 'productos' | 'proveedores' | 'eventos';
+type Tab = 'productos' | 'proveedores' | 'eventos' | 'alertas';
+
+const UMBRALES_KEY = 'barrapro_umbrales_stock';
+
+export function getUmbralesStock(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(UMBRALES_KEY) || '{}');
+  } catch { return {}; }
+}
 
 export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
   const [tab, setTab] = useState<Tab>('productos');
@@ -14,6 +22,7 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [proveedores, setProveedores] = useState<string[]>([]);
   const [eventos, setEventos] = useState<Evento[]>([]);
+  const [umbrales, setUmbrales] = useState<Record<string, number>>({});
 
   // Modal de Edición de Producto
   const [editProd, setEditProd] = useState<Producto | null>(null);
@@ -29,6 +38,7 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
       setProductos(pData);
       setProveedores(provData);
       setEventos(evData);
+      setUmbrales(getUmbralesStock());
     } catch (e) {
       console.error(e);
     } finally {
@@ -72,6 +82,11 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
     loadData();
   };
 
+  const handleSaveUmbrales = () => {
+    localStorage.setItem(UMBRALES_KEY, JSON.stringify(umbrales));
+    alert('✅ Umbrales guardados correctamente.');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-hidden font-sans text-slate-900 p-6">
       <div className="max-w-5xl mx-auto">
@@ -97,6 +112,7 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
             { id: 'productos', label: 'Productos', icon: <Package size={16} /> },
             { id: 'proveedores', label: 'Proveedores', icon: <Truck size={16} /> },
             { id: 'eventos', label: 'Historial Eventos', icon: <CalendarIcon size={16} /> },
+            { id: 'alertas', label: '⚠️ Alertas Stock', icon: <Bell size={16} /> },
           ].map(t => (
             <button
               key={t.id}
@@ -199,6 +215,49 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
                     )}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* ── TAB ALERTAS DE STOCK ── */}
+            {tab === 'alertas' && (
+              <div className="p-6">
+                <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-100 flex items-start gap-3">
+                  <Bell size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-black text-amber-800">Umbrales de Alerta por Producto</p>
+                    <p className="text-xs text-amber-600 mt-0.5">Define la cantidad mínima de cada producto. Cuando el stock baje de ese número, la barra verá una alerta roja ⚠️ en tiempo real.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  {productos.map(p => (
+                    <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:border-amber-200 transition-all">
+                      <div>
+                        <p className="font-black text-slate-800 text-sm">{p.nombre}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{p.categoria} · {p.unidad}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Alerta si baja de:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          className="w-20 h-9 text-center font-black text-slate-900 bg-amber-50 border-2 border-amber-200 focus:border-amber-500 rounded-xl outline-none transition-all text-sm"
+                          value={umbrales[p.id] ?? ''}
+                          placeholder="0"
+                          onChange={e => setUmbrales(prev => ({
+                            ...prev,
+                            [p.id]: Number(e.target.value)
+                          }))}
+                        />
+                        <span className="text-[10px] text-slate-400 font-bold">{p.unidad}s</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Btn variant="brand" onClick={handleSaveUmbrales} icon={<Bell size={16} />}>
+                  Guardar Umbrales de Alerta
+                </Btn>
               </div>
             )}
           </Card>

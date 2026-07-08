@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, Percent, Banknote, Trash2, Pencil, ShieldCheck, ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from '@/types';
 import { nowTime } from '@/utils/calculos';
+import { getUmbralesStock } from './AdminPanel';
+import { getQueue } from '@/lib/offlineQueue';
 import { Btn, Card, Field, inputCls, Badge, SectionHeader } from './UI';
 
 type Tab = 'inventario' | 'recargas' | 'cortesias' | 'perdidas' | 'descuentos' | 'gastos' | 'stock';
@@ -242,8 +244,66 @@ export default function Operacion({
   const tabActive = 'bg-slate-900 text-white shadow-md';
   const tabInactive = 'text-slate-500 hover:bg-slate-50';
 
+  // ── ALERTAS DE STOCK BAJO ──────────────────────────────────────────────────
+  const stockAlertas = useMemo(() => {
+    const umbrales = getUmbralesStock();
+    return productos
+      .map(p => {
+        const umbral = umbrales[p.id];
+        if (!umbral || umbral <= 0) return null;
+        const ini = Number(inventarioInicial[p.id]?.cantidad || 0);
+        const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+        const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+        const per = perdidas.filter(l => l.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+        const stock = ini + rec - cor - per;
+        if (stock <= umbral) return { nombre: p.nombre, stock, umbral };
+        return null;
+      })
+      .filter(Boolean) as { nombre: string; stock: number; umbral: number }[];
+  }, [productos, inventarioInicial, recargas, cortesias, perdidas]);
+
+  // ── OPERACIONES OFFLINE PENDIENTES ───────────────────────────────────────
+  const [pendingOps, setPendingOps] = useState(0);
+  useEffect(() => {
+    const checkQueue = () => setPendingOps(getQueue().length);
+    checkQueue();
+    const iv = setInterval(checkQueue, 5000);
+    return () => clearInterval(iv);
+  }, []);
+
   return (
     <div className="w-full py-2">
+
+      {/* ── BANNER OFFLINE ── */}
+      {pendingOps > 0 && (
+        <div className="mb-4 flex items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 animate-in slide-in-from-top-2">
+          <span className="text-amber-500 text-lg">📡</span>
+          <div className="flex-1">
+            <p className="text-sm font-black text-amber-800">Sin conexión — {pendingOps} operación{pendingOps > 1 ? 'es' : ''} pendiente{pendingOps > 1 ? 's' : ''}</p>
+            <p className="text-xs text-amber-600">Se sincronizarán automáticamente cuando vuelva el internet.</p>
+          </div>
+          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+        </div>
+      )}
+
+      {/* ── ALERTAS DE STOCK BAJO ── */}
+      {stockAlertas.length > 0 && (
+        <div className="mb-4 p-4 rounded-2xl bg-rose-50 border border-rose-200 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-rose-500 animate-pulse">⚠️</span>
+            <p className="text-sm font-black text-rose-800 uppercase tracking-widest">Stock Crítico — Necesitas recargar</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {stockAlertas.map(a => (
+              <span key={a.nombre} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-100 border border-rose-200 text-xs font-black text-rose-700">
+                {a.nombre}
+                <span className="bg-rose-500 text-white rounded-lg px-1.5 py-0.5 text-[10px]">{a.stock} ud</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row lg:items-start gap-8">
 
         <div className="flex-1 min-w-0 overflow-hidden">

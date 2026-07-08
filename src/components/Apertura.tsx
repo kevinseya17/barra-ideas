@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, PackageOpen, Settings, LayoutGrid, List, ChevronDown, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, PackageOpen, Settings, LayoutGrid, List, ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Producto, Evento } from '@/types';
 import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
@@ -42,6 +42,10 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
   const [nuevo, setNuevo] = useState<Omit<Producto, 'id'>>(prodVacio());
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [cargando, setCargando] = useState(true);
+  const [pinEliminarModal, setPinEliminarModal] = useState<{ id: string; nombre: string } | null>(null);
+  const [pinEliminar, setPinEliminar] = useState('');
+  const [pinEliminarError, setPinEliminarError] = useState(false);
+  const PIN_ADMIN = '1234';
   const [formInv, setFormInv] = useState<Record<string, { cantidad: string, proveedor: string }>>(() => {
     if (invInicial) {
       return Object.fromEntries(Object.entries(invInicial).map(([k, v]) => [k, { cantidad: String(v.cantidad), proveedor: v.proveedor }]));
@@ -106,8 +110,19 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
     }
   };
 
+  const [creandoProducto, setCreandoProducto] = useState(false);
   const agregarProducto = async () => {
     if (!nuevo.nombre.trim()) return;
+    if (creandoProducto) return; // Anti doble-click
+    
+    // Verificar duplicado local (por nombre, case-insensitive)
+    const yaExiste = productos.some(p => p.nombre.toLowerCase().trim() === nuevo.nombre.toLowerCase().trim());
+    if (yaExiste) {
+      alert(`El producto "${nuevo.nombre}" ya existe en la lista.`);
+      return;
+    }
+    
+    setCreandoProducto(true);
     const prodGuardado = await api.createProducto({ 
       ...nuevo, 
       costo: Number(nuevo.costo), 
@@ -115,11 +130,31 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
       activo: true 
     });
     if (prodGuardado) {
-      setProductos(p => [...p, prodGuardado]);
+      // Evitar duplicado en el array local si createProducto retornó uno ya existente
+      setProductos(p => p.some(x => x.id === prodGuardado.id) ? p : [...p, prodGuardado]);
       setNuevo(prodVacio());
     } else {
       alert("Error al guardar el producto en la base de datos");
     }
+    setCreandoProducto(false);
+  };
+
+  // BUG 4 FIX: Eliminar producto con confirmación PIN
+  const solicitarEliminarProducto = (id: string, nombre: string) => {
+    setPinEliminar('');
+    setPinEliminarError(false);
+    setPinEliminarModal({ id, nombre });
+  };
+
+  const confirmarEliminarProducto = async () => {
+    if (!pinEliminarModal) return;
+    if (pinEliminar !== PIN_ADMIN) {
+      setPinEliminarError(true);
+      setPinEliminar('');
+      return;
+    }
+    await eliminarProducto(pinEliminarModal.id);
+    setPinEliminarModal(null);
   };
 
   const eliminarProducto = async (id: string) => {
@@ -203,6 +238,7 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
   const tieneInvPrecargado = invInicial && Object.keys(invInicial).length > 0;
 
   return (
+    <>
     <div className="max-w-3xl mx-auto px-4 py-10 relative">
       <SectionHeader
         step="01 APERTURA"
@@ -479,10 +515,11 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{p.unidad}</p>
                           </div>
                           <button 
-                            onClick={() => eliminarProducto(p.id)}
+                            onClick={() => solicitarEliminarProducto(p.id, p.nombre)}
                             className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
+                            title="Eliminar producto (requiere PIN)"
                           >
-                            <Trash2 size={16} />
+                            <ShieldCheck size={16} />
                           </button>
                         </div>
 
@@ -581,8 +618,8 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
                         </select>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button onClick={() => eliminarProducto(p.id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
-                          <Trash2 size={16} />
+                        <button onClick={() => solicitarEliminarProducto(p.id, p.nombre)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors" title="Eliminar (PIN)">
+                          <ShieldCheck size={16} />
                         </button>
                       </td>
                     </tr>
@@ -627,8 +664,8 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
               <input type="number" className={inputCls} value={nuevo.precio || ''} onChange={e => setNuevo(n => ({ ...n, precio: Number(e.target.value) }))} placeholder="0" />
             </Field>
           </div>
-          <Btn variant="ghost" size="md" icon={<Plus size={16} />} onClick={agregarProducto} className="w-full sm:w-auto">
-            Registrar Producto
+          <Btn variant="ghost" size="md" icon={<Plus size={16} />} onClick={agregarProducto} className={`w-full sm:w-auto ${creandoProducto ? 'opacity-50 pointer-events-none' : ''}`}>
+            {creandoProducto ? 'Guardando...' : 'Registrar Producto'}
           </Btn>
         </div>
       </Card>
@@ -639,5 +676,57 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
         </Btn>
       </div>
     </div>
-  );
+
+    {/* BUG 4 FIX: Modal PIN para eliminar producto */}
+    {pinEliminarModal && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="bg-white w-full max-w-sm rounded-[2.5rem] border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="p-8 bg-gradient-to-br from-rose-900 to-slate-900">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+                <ShieldCheck size={28} className="text-rose-400" />
+              </div>
+              <h3 className="text-lg font-black text-white uppercase tracking-tight">Confirmar Eliminación</h3>
+              <p className="text-[10px] text-rose-300 font-black uppercase tracking-widest">Ingresa el PIN de Admin</p>
+            </div>
+          </div>
+          <div className="p-8 flex flex-col gap-4">
+            <div className="p-3 bg-rose-50 rounded-2xl border border-rose-100">
+              <p className="text-xs font-bold text-rose-700 text-center">Eliminar: <strong>{pinEliminarModal.nombre}</strong></p>
+            </div>
+            <input
+              type="password"
+              maxLength={4}
+              className={`${inputCls} text-center text-2xl font-black tracking-[0.5em]`}
+              placeholder="••••"
+              value={pinEliminar}
+              autoFocus
+              onChange={e => { setPinEliminar(e.target.value); setPinEliminarError(false); }}
+              onKeyDown={e => { if (e.key === 'Enter') confirmarEliminarProducto(); }}
+            />
+            {pinEliminarError && (
+              <p className="text-rose-500 text-xs font-black uppercase tracking-widest text-center animate-in fade-in">
+                ❌ PIN incorrecto
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPinEliminarModal(null)}
+                className="flex-1 py-3 rounded-2xl border-2 border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarEliminarProducto}
+                className="flex-1 py-3 rounded-2xl bg-rose-500 text-white font-black text-xs hover:bg-rose-600 transition-all shadow-lg shadow-rose-200"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>)
+  ;
 }

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import * as api from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { Activity, RefreshCw, Gift, AlertTriangle, Percent, Banknote, PackagePlus, Eye, TrendingUp } from 'lucide-react';
+import { Activity, RefreshCw, Gift, AlertTriangle, Percent, Banknote, PackagePlus, Eye, TrendingUp, Snowflake, FlameKindling, ShieldCheck, ArrowLeftRight } from 'lucide-react';
 
 interface BarActivity {
   id: string;
@@ -27,9 +27,10 @@ interface BarData {
 }
 
 interface MonitorBarrasProps {
-  barEvents: { id: string; nombre: string }[]; // Las barras activas (sin bodega)
+  barEvents: { id: string; nombre: string; estado?: string }[]; // Las barras activas (sin bodega)
   productos: { id: string; nombre: string }[];
   isDark?: boolean;
+  onCongelarBarra?: (eventoId: string, congelar: boolean) => Promise<void>;
 }
 
 const TIPO_META: Record<string, { icon: React.ReactNode; label: string; color: string; bg: string }> = {
@@ -45,12 +46,20 @@ const BAR_COLORS = [
   'bg-cyan-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500',
 ];
 
-export default function MonitorBarras({ barEvents, productos, isDark }: MonitorBarrasProps) {
+const PIN_ADMIN = '1234';
+
+export default function MonitorBarras({ barEvents, productos, isDark, onCongelarBarra }: MonitorBarrasProps) {
   const [allActivity, setAllActivity] = useState<BarActivity[]>([]);
   const [barDataCache, setBarDataCache] = useState<Record<string, BarData>>({});
   const [selectedBar, setSelectedBar] = useState<string>('all');
+  const [monitorTab, setMonitorTab] = useState<'actividad' | 'transferencias'>('actividad');
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  // Estado para el modal de PIN de congelar
+  const [pinModal, setPinModal] = useState<{ eventoId: string; nombre: string; congelar: boolean } | null>(null);
+  const [pinValue, setPinValue] = useState('');
+  const [pinError, setPinError] = useState(false);
+  const [congelando, setCongelando] = useState(false);
 
   const pName = (id: string) => productos.find(p => p.id === id)?.nombre || 'Producto';
 
@@ -207,8 +216,30 @@ export default function MonitorBarras({ barEvents, productos, isDark }: MonitorB
       cortesias: data?.cortesias?.length || 0,
       perdidas: data?.perdidas?.length || 0,
       total: acts.length,
+      congelada: (ev as any).estado === 'congelado',
     };
   });
+
+  const abrirPinCongelar = (eventoId: string, nombre: string, congelar: boolean) => {
+    setPinValue('');
+    setPinError(false);
+    setPinModal({ eventoId, nombre, congelar });
+  };
+
+  const confirmarCongelar = async () => {
+    if (!pinModal) return;
+    if (pinValue !== PIN_ADMIN) {
+      setPinError(true);
+      setPinValue('');
+      return;
+    }
+    setCongelando(true);
+    if (onCongelarBarra) {
+      await onCongelarBarra(pinModal.eventoId, pinModal.congelar);
+    }
+    setPinModal(null);
+    setCongelando(false);
+  };
 
   if (isLoading) {
     return (
@@ -224,6 +255,7 @@ export default function MonitorBarras({ barEvents, productos, isDark }: MonitorB
   }
 
   return (
+    <>
     <div className="space-y-8">
       {/* HEADER */}
       <div className="flex items-center justify-between">
@@ -253,29 +285,42 @@ export default function MonitorBarras({ barEvents, productos, isDark }: MonitorB
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {barSummary.map(({ ev, idx, recargas, cortesias, perdidas, total }) => (
-              <button
+            {barSummary.map(({ ev, idx, recargas, cortesias, perdidas, total, congelada }) => (
+              <div
                 key={ev.id}
-                onClick={() => setSelectedBar(selectedBar === ev.id ? 'all' : ev.id)}
-                className={`p-6 rounded-3xl border-2 text-left transition-all hover:shadow-lg group ${
-                  selectedBar === ev.id
-                    ? 'border-[#00d2ff] bg-cyan-50 shadow-lg shadow-cyan-100'
-                    : 'border-slate-100 bg-white hover:border-[#00d2ff]'
+                className={`p-6 rounded-3xl border-2 text-left transition-all ${
+                  congelada
+                    ? 'border-blue-200 bg-blue-50/60 opacity-75'
+                    : selectedBar === ev.id
+                      ? 'border-[#00d2ff] bg-cyan-50 shadow-lg shadow-cyan-100'
+                      : 'border-slate-100 bg-white hover:border-[#00d2ff] hover:shadow-lg'
                 }`}
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-2xl ${BAR_COLORS[idx % BAR_COLORS.length]} flex items-center justify-center text-white font-black text-sm shadow-md`}>
-                    {idx + 1}
+                  <div className={`w-10 h-10 rounded-2xl ${
+                    congelada ? 'bg-blue-400' : BAR_COLORS[idx % BAR_COLORS.length]
+                  } flex items-center justify-center text-white font-black text-sm shadow-md`}>
+                    {congelada ? <Snowflake size={18} /> : idx + 1}
                   </div>
-                  <div>
-                    <p className="font-black text-slate-900 text-sm uppercase tracking-tight">{ev.nombre.replace(/^.*- /, '')}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-black text-slate-900 text-sm uppercase tracking-tight truncate">{ev.nombre.replace(/^.*- /, '')}</p>
+                      {congelada && (
+                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest bg-blue-100 px-2 py-0.5 rounded-full shrink-0">❄️ Congelada</span>
+                      )}
+                    </div>
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{total} movimientos</p>
                   </div>
-                  {selectedBar === ev.id && (
-                    <div className="ml-auto w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                  {selectedBar === ev.id && !congelada && (
+                    <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+
+                {/* Stats */}
+                <div
+                  className="grid grid-cols-3 gap-2 mb-4 cursor-pointer"
+                  onClick={() => !congelada && setSelectedBar(selectedBar === ev.id ? 'all' : ev.id)}
+                >
                   <div className="text-center p-2 rounded-xl bg-indigo-50">
                     <p className="text-lg font-black text-indigo-600">{recargas}</p>
                     <p className="text-[9px] font-bold text-indigo-400 uppercase">Recargas</p>
@@ -289,88 +334,255 @@ export default function MonitorBarras({ barEvents, productos, isDark }: MonitorB
                     <p className="text-[9px] font-bold text-rose-400 uppercase">Pérdidas</p>
                   </div>
                 </div>
-              </button>
+
+                {/* Botón Congelar/Descongelar */}
+                {onCongelarBarra && (
+                  <button
+                    onClick={() => abrirPinCongelar(ev.id, ev.nombre.replace(/^.*- /, ''), !congelada)}
+                    className={`w-full flex items-center justify-center gap-2 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      congelada
+                        ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200'
+                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100'
+                    }`}
+                  >
+                    {congelada ? (
+                      <><FlameKindling size={12} /> Descongelar barra</>
+                    ) : (
+                      <><Snowflake size={12} /> Congelar barra</>
+                    )}
+                  </button>
+                )}
+              </div>
             ))}
           </div>
 
-          {/* FILTRO */}
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* TABS ACTIVIDAD / TRANSFERENCIAS */}
+          <div className="flex gap-2">
             <button
-              onClick={() => setSelectedBar('all')}
+              onClick={() => setMonitorTab('actividad')}
               className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                selectedBar === 'all'
-                  ? 'bg-slate-900 text-white shadow-md'
-                  : 'text-slate-500 hover:bg-slate-100'
+                monitorTab === 'actividad' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'
               }`}
             >
-              Todas las Barras
+              📡 Actividad en Vivo
             </button>
-            {barEvents.map((ev, idx) => (
-              <button
-                key={ev.id}
-                onClick={() => setSelectedBar(selectedBar === ev.id ? 'all' : ev.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-                  selectedBar === ev.id
-                    ? `${BAR_COLORS[idx % BAR_COLORS.length]} text-white shadow-md`
-                    : 'text-slate-500 hover:bg-slate-100'
-                }`}
-              >
-                {ev.nombre.replace(/^.*- /, '')}
-              </button>
-            ))}
             <button
-              onClick={loadAllBars}
-              className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black text-cyan-600 hover:bg-cyan-50 transition-all"
+              onClick={() => setMonitorTab('transferencias')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                monitorTab === 'transferencias' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'
+              }`}
             >
-              <RefreshCw size={12} /> Actualizar
+              <ArrowLeftRight size={12} /> Transferencias
             </button>
           </div>
 
-          {/* FEED DE ACTIVIDAD */}
-          <div className="space-y-3">
-            {filtered.length === 0 ? (
-              <div className="text-center py-12 rounded-3xl border-2 border-dashed border-slate-100">
-                <TrendingUp size={32} className="mx-auto text-slate-200 mb-3" />
-                <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Sin actividad registrada aún</p>
-              </div>
-            ) : (
-              filtered.map((act, i) => {
-                const meta = TIPO_META[act.tipo];
-                const barIdx = barEvents.findIndex(e => e.id === act.eventoId);
-                const barColor = BAR_COLORS[barIdx % BAR_COLORS.length];
-                return (
-                  <div
-                    key={act.id}
-                    className={`flex items-start gap-4 p-4 rounded-2xl border animate-in slide-in-from-top-1 ${meta.bg}`}
-                    style={{ animationDelay: `${i * 20}ms` }}
+          {monitorTab === 'actividad' && (
+            <>
+              {/* FILTRO */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  onClick={() => setSelectedBar('all')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                    selectedBar === 'all'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  Todas las Barras
+                </button>
+                {barEvents.map((ev, idx) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => setSelectedBar(selectedBar === ev.id ? 'all' : ev.id)}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                      selectedBar === ev.id
+                        ? `${BAR_COLORS[idx % BAR_COLORS.length]} text-white shadow-md`
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
                   >
-                    {/* Indicador de barra */}
-                    <div className={`w-1.5 self-stretch rounded-full ${barColor} shrink-0`} />
+                    {ev.nombre.replace(/^.*- /, '')}
+                  </button>
+                ))}
+                <button
+                  onClick={loadAllBars}
+                  className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black text-cyan-600 hover:bg-cyan-50 transition-all"
+                >
+                  <RefreshCw size={12} /> Actualizar
+                </button>
+              </div>
 
-                    {/* Ícono tipo */}
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${meta.color} bg-white shadow-sm border border-current/10`}>
-                      {meta.icon}
-                    </div>
-
-                    {/* Contenido */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">·</span>
-                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">{act.barNombre}</span>
-                      </div>
-                      <p className="text-xs font-bold text-slate-700 leading-snug">{act.descripcion}</p>
-                    </div>
-
-                    {/* Hora */}
-                    <span className="text-[10px] font-bold text-slate-400 shrink-0">{act.hora}</span>
+              {/* FEED DE ACTIVIDAD */}
+              <div className="space-y-3">
+                {filtered.length === 0 ? (
+                  <div className="text-center py-12 rounded-3xl border-2 border-dashed border-slate-100">
+                    <TrendingUp size={32} className="mx-auto text-slate-200 mb-3" />
+                    <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Sin actividad registrada aún</p>
                   </div>
-                );
-              })
-            )}
-          </div>
+                ) : (
+                  filtered.map((act, i) => {
+                    const meta = TIPO_META[act.tipo];
+                    const barIdx = barEvents.findIndex(e => e.id === act.eventoId);
+                    const barColor = BAR_COLORS[barIdx % BAR_COLORS.length];
+                    return (
+                      <div
+                        key={act.id}
+                        className={`flex items-start gap-4 p-4 rounded-2xl border animate-in slide-in-from-top-1 ${meta.bg}`}
+                        style={{ animationDelay: `${i * 20}ms` }}
+                      >
+                        <div className={`w-1.5 self-stretch rounded-full ${barColor} shrink-0`} />
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${meta.color} bg-white shadow-sm border border-current/10`}>
+                          {meta.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${meta.color}`}>{meta.label}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">·</span>
+                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">{act.barNombre}</span>
+                          </div>
+                          <p className="text-xs font-bold text-slate-700 leading-snug">{act.descripcion}</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 shrink-0">{act.hora}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+
+          {monitorTab === 'transferencias' && (() => {
+            // Recopilar todos los traslados de todas las barras
+            const traslados: { hora: string; origen: string; destino: string; producto: string; cantidad: number }[] = [];
+
+            Object.values(barDataCache).forEach(({ evento, perdidas: pers, recargas: recs }) => {
+              const barNombre = evento.nombre.replace(/^.*- /, '');
+              // Pérdidas = salida de Barra A ("Traslado enviado →")
+              pers.filter((p: any) => String(p.motivo || '').startsWith('Traslado enviado')).forEach((p: any) => {
+                const match = String(p.motivo).match(/→ (.+)$/);
+                const destino = match ? match[1].replace(/^.*- /, '') : '?';
+                const prodNombre = productos.find(x => x.id === p.producto_id)?.nombre || p.producto_id;
+                traslados.push({ hora: p.hora || '--:--', origen: barNombre, destino, producto: prodNombre, cantidad: p.cantidad });
+              });
+            });
+
+            traslados.sort((a, b) => b.hora.localeCompare(a.hora));
+
+            return (
+              <div className="space-y-3">
+                {traslados.length === 0 ? (
+                  <div className="text-center py-12 rounded-3xl border-2 border-dashed border-slate-100">
+                    <ArrowLeftRight size={32} className="mx-auto text-slate-200 mb-3" />
+                    <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Sin transferencias entre barras aún</p>
+                  </div>
+                ) : (
+                  traslados.map((t, i) => (
+                    <div key={i} className="flex items-center gap-4 p-4 rounded-2xl border bg-indigo-50 border-indigo-100 animate-in slide-in-from-top-1">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center shrink-0">
+                        <ArrowLeftRight size={14} className="text-indigo-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">{t.origen}</span>
+                          <span className="text-indigo-400">→</span>
+                          <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">{t.destino}</span>
+                          <span className="text-[10px] text-slate-400">·</span>
+                          <span className="text-xs font-bold text-slate-700">{t.producto}</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-indigo-500 text-white text-[10px] font-black">
+                            ×{t.cantidad}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 shrink-0">{t.hora}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
+
+    {/* Modal PIN para congelar/descongelar */}
+    {pinModal && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="bg-white w-full max-w-sm rounded-[2.5rem] border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className={`p-8 bg-gradient-to-br ${
+            pinModal.congelar ? 'from-blue-900 to-slate-900' : 'from-amber-900 to-slate-900'
+          }`}>
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${
+                pinModal.congelar
+                  ? 'bg-blue-500/20 border-blue-500/30'
+                  : 'bg-amber-500/20 border-amber-500/30'
+              }`}>
+                {pinModal.congelar
+                  ? <Snowflake size={28} className="text-blue-300" />
+                  : <FlameKindling size={28} className="text-amber-300" />}
+              </div>
+              <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                {pinModal.congelar ? 'Congelar Barra' : 'Descongelar Barra'}
+              </h3>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${
+                pinModal.congelar ? 'text-blue-300' : 'text-amber-300'
+              }`}>{pinModal.nombre}</p>
+            </div>
+          </div>
+          <div className="p-8 flex flex-col gap-4">
+            <div className={`p-3 rounded-2xl border text-center text-xs font-bold ${
+              pinModal.congelar
+                ? 'bg-blue-50 border-blue-100 text-blue-700'
+                : 'bg-amber-50 border-amber-100 text-amber-700'
+            }`}>
+              {pinModal.congelar
+                ? '❄️ La barra quedará excluida del consolidado global. Podrás descongelarla cuando quieras.'
+                : '🔥 La barra volverá a aparecer en el consolidado global.'}
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">PIN de Admin</p>
+              <div className="flex items-center gap-2 justify-center">
+                <ShieldCheck size={14} className="text-slate-400" />
+                <span className="text-[10px] text-slate-400">Ingresa el PIN para confirmar</span>
+              </div>
+            </div>
+            <input
+              type="password"
+              maxLength={4}
+              className="w-full h-12 bg-slate-50 border-2 border-slate-200 focus:border-[#00d2ff] rounded-2xl text-center text-2xl font-black tracking-[0.5em] outline-none transition-all"
+              placeholder="••••"
+              value={pinValue}
+              autoFocus
+              onChange={e => { setPinValue(e.target.value); setPinError(false); }}
+              onKeyDown={e => { if (e.key === 'Enter') confirmarCongelar(); }}
+            />
+            {pinError && (
+              <p className="text-rose-500 text-xs font-black uppercase tracking-widest text-center animate-in fade-in">
+                ❌ PIN incorrecto
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPinModal(null)}
+                className="flex-1 py-3 rounded-2xl border-2 border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarCongelar}
+                disabled={congelando}
+                className={`flex-1 py-3 rounded-2xl text-white font-black text-xs transition-all shadow-lg ${
+                  pinModal.congelar
+                    ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-200'
+                    : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
+                } disabled:opacity-50`}
+              >
+                {congelando ? '...' : pinModal.congelar ? '❄️ Congelar' : '🔥 Descongelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

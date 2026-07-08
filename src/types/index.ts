@@ -14,7 +14,7 @@ export interface Evento {
   fecha: string;
   responsable: string;
   caja_inicial: number;
-  estado: 'abierto' | 'cerrado';
+  estado: 'abierto' | 'cerrado' | 'congelado';
   created_at?: string;
 }
 

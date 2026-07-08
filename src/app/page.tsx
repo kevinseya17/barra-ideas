@@ -168,10 +168,19 @@ export default function BarraProApp() {
     const syncInterval = setInterval(async () => {
       const data = await api.getEventoData(eventoId);
       setState(s => {
-        // Solo actualizamos si hay cambios reales en las longitudes (evitar re-renders masivos innecesarios)
-        if (s.recargas.length === data.recargas.length && s.perdidas.length === data.perdidas.length && s.cortesias.length === data.cortesias.length) {
-          return s;
-        }
+        // Comparar por ID del primer elemento además de la longitud — 
+        // evita el bug donde un traslado ya guardado en BD tiene la misma
+        // longitud que el optimista incorrecto y se ignora la actualización.
+        const mismaLongitud =
+          s.recargas.length === data.recargas.length &&
+          s.perdidas.length === data.perdidas.length &&
+          s.cortesias.length === data.cortesias.length;
+        
+        const mismoContenido =
+          s.recargas[0]?.id === data.recargas[0]?.id &&
+          s.perdidas[0]?.id === data.perdidas[0]?.id;
+
+        if (mismaLongitud && mismoContenido) return s;
         return { ...s, recargas: data.recargas, perdidas: data.perdidas, cortesias: data.cortesias };
       });
     }, 4000);
@@ -298,8 +307,18 @@ export default function BarraProApp() {
     // SI ES BODEGA, CALCULAR CONSOLIDADO DE BARRAS
     if (ev.nombre.startsWith('BODEGA -')) {
       const baseEventName = ev.nombre.replace('BODEGA - ', '');
-      const openEvs = await api.getEventosAbiertos();
-      const linkedBarras = openEvs.filter(e => e.nombre.includes(baseEventName) && !e.nombre.startsWith('BODEGA -'));
+      // Traer TODAS las barras del evento: abiertas, cerradas y congeladas
+      // Las barras que ya cerraron (llegaron al Reporte) deben seguir visibles en la Bodega
+      const { data: todasBarras } = await supabase
+        .from('eventos')
+        .select('*')
+        .in('estado', ['abierto', 'cerrado', 'congelado'])
+        .order('created_at', { ascending: false });
+      
+      const linkedBarras = (todasBarras || []).filter(e => 
+        e.nombre.includes(baseEventName) && 
+        !e.nombre.startsWith('BODEGA -')
+      );
       
       const stats = await Promise.all(linkedBarras.map(async (lb) => {
         const [lbData, lbDinero] = await Promise.all([
@@ -307,7 +326,18 @@ export default function BarraProApp() {
           api.getCierreDinero(lb.id)
         ]);
         const invInicialLB = Object.fromEntries(lbData.inventario.filter(i => i.tipo === 'inicial').map(i => [i.producto_id, { cantidad: i.cantidad, proveedor: i.proveedor }]));
-        const res = calcularResumen(prods, invInicialLB, lbData.recargas, lbData.cortesias, lbData.perdidas, lbData.descuentos, {});
+        
+        // BUG 2 FIX: Excluir recargas que son traslados de OTRAS barras para no duplicar
+        // en el cálculo del consolidado global de bodega.
+        // Los traslados entre barras son neutros: A pierde X, B gana X → total sin cambio.
+        const recargasSinTraslados = lbData.recargas.filter(
+          (r: any) => !String(r.proveedor || '').startsWith('Traslado desde')
+        );
+        const perdidasSinTraslados = lbData.perdidas.filter(
+          (p: any) => !String(p.motivo || '').startsWith('Traslado enviado')
+        );
+        
+        const res = calcularResumen(prods, invInicialLB, recargasSinTraslados, lbData.cortesias, perdidasSinTraslados, lbData.descuentos, {});
         const ventasProyectadas = res.reduce((sum, item) => sum + (item.consumo * (prods.find(p => p.id === item.id)?.precio || 0)), 0);
         return { 
           nombre: lb.nombre.split(' - ').slice(-1)[0] || lb.nombre,
@@ -319,6 +349,7 @@ export default function BarraProApp() {
           datafono: lbDinero?.datafono ?? 0,
           nequi: lbDinero?.nequi ?? 0,
           cerrada: lb.estado === 'cerrado',
+          congelada: lb.estado === 'congelado',
         };
       }));
       setConsolidadoBarras(stats);
@@ -680,21 +711,25 @@ export default function BarraProApp() {
   const handleTrasladoEntreBarra = async (eventoDestinoId: string, productoId: string, cantidad: number) => {
     if (!state.evento) return;
     const time = nowTime();
+    const eventoOrigenId = state.evento.id;
 
     // 1. Registrar pérdida en la barra de origen (esta barra)
     const perdidaId = uid();
     const destNombre = openEvents.find(e => e.id === eventoDestinoId)?.nombre || 'Otra Barra';
-    await api.createPerdida({
+    const nuevaPerdida: Perdida = {
       id: perdidaId,
-      evento_id: state.evento.id,
+      evento_id: eventoOrigenId,
       producto_id: productoId,
       cantidad,
       motivo: `Traslado enviado → ${destNombre}`,
       hora: time
-    });
+    };
+    await api.createPerdida(nuevaPerdida);
+
+    // BUG 1 FIX: Actualización optimista inmediata + re-fetch forzado desde BD
     setState(s => ({
       ...s,
-      perdidas: [{ id: perdidaId, evento_id: s.evento!.id, producto_id: productoId, cantidad, motivo: `Traslado enviado → ${destNombre}`, hora: time }, ...s.perdidas]
+      perdidas: [nuevaPerdida, ...s.perdidas.filter(p => p.id !== perdidaId)]
     }));
 
     // 2. Registrar recarga en la barra destino
@@ -707,6 +742,16 @@ export default function BarraProApp() {
       hora: time
     });
 
+    // BUG 1 FIX: Re-sincronizar desde BD para garantizar consistencia
+    setTimeout(async () => {
+      const freshData = await api.getEventoData(eventoOrigenId);
+      setState(s => ({
+        ...s,
+        perdidas: freshData.perdidas,
+        recargas: freshData.recargas,
+      }));
+    }, 800);
+
     addLog(`🔄 Traslado enviado: ${cantidad} de ${pName(productoId)} → ${destNombre}`, 'info');
   };
 
@@ -714,6 +759,7 @@ export default function BarraProApp() {
   const handleRecibirDeOtraBarra = async (eventoOrigenId: string, productoId: string, cantidad: number) => {
     if (!state.evento) return;
     const time = nowTime();
+    const eventoDestinoId = state.evento.id;
     const origenNombre = openEvents.find(e => e.id === eventoOrigenId)?.nombre || 'Otra Barra';
 
     // 1. Registrar pérdida en la barra de origen (la que entrega)
@@ -728,20 +774,42 @@ export default function BarraProApp() {
 
     // 2. Registrar recarga en esta barra (la que recibe) — con update optimista
     const recargaId = uid();
-    await api.createRecarga({
+    const nuevaRecarga: Recarga = {
       id: recargaId,
-      evento_id: state.evento.id,
+      evento_id: eventoDestinoId,
       producto_id: productoId,
       cantidad,
       proveedor: `Traslado desde ${origenNombre}`,
       hora: time
-    });
+    };
+    await api.createRecarga(nuevaRecarga);
+
+    // BUG 1 FIX: Actualización optimista + re-fetch forzado
     setState(s => ({
       ...s,
-      recargas: [{ id: recargaId, evento_id: s.evento!.id, producto_id: productoId, cantidad, proveedor: `Traslado desde ${origenNombre}`, hora: time }, ...s.recargas]
+      recargas: [nuevaRecarga, ...s.recargas.filter(r => r.id !== recargaId)]
     }));
 
+    // BUG 1 FIX: Re-sincronizar desde BD para garantizar consistencia
+    setTimeout(async () => {
+      const freshData = await api.getEventoData(eventoDestinoId);
+      setState(s => ({
+        ...s,
+        perdidas: freshData.perdidas,
+        recargas: freshData.recargas,
+      }));
+    }, 800);
+
     addLog(`📥 Recibido: ${cantidad} de ${pName(productoId)} ← ${origenNombre}`, 'info');
+  };
+
+  // BUG 3 FIX: Congelar/descongelar una barra sin cerrarla
+  const handleCongelarBarra = async (eventoId: string, congelar: boolean) => {
+    const nuevoEstado = congelar ? 'congelado' : 'abierto';
+    await api.updateRecord('eventos', eventoId, { estado: nuevoEstado });
+    const openEvs = await api.getEventosAbiertos();
+    setOpenEvents(openEvs);
+    addLog(`❄️ Barra ${congelar ? 'congelada' : 'descongelada'}: ${openEvents.find(e => e.id === eventoId)?.nombre || eventoId}`, 'info');
   };
 
   const handleCierre = async (
@@ -1032,6 +1100,7 @@ export default function BarraProApp() {
                       barEvents={barrasDelEvento}
                       productos={state.productos}
                       isDark={state.isDark}
+                      onCongelarBarra={handleCongelarBarra}
                     />
                   </div>
                 );
@@ -1125,41 +1194,82 @@ export default function BarraProApp() {
             
             <div className="p-10 space-y-4 max-h-[60vh] overflow-y-auto">
               {openEvents.length > 0 ? (
-                openEvents.map(ev => (
-                  <button
-                    key={ev.id}
-                    onClick={() => {
-                      setShowSelector(false);
-                      if (ev.nombre.startsWith('BODEGA -')) {
-                        // Pedir PIN antes de entrar a la Bodega
-                        setPinInput('');
-                        setPinError(false);
-                        setPinModal({ ev });
-                      } else {
-                        rehydrateFromCloud(ev);
-                      }
-                    }}
-                    className={`w-full group p-8 rounded-[2.5rem] transition-all flex items-center justify-between border-2 ${
-                      state.isDark 
-                        ? 'bg-white/5 border-white/5 hover:border-[#00d2ff] hover:bg-white/10' 
-                        : 'bg-white border-slate-100 hover:border-[#00d2ff] shadow-sm hover:shadow-xl'
-                    }`}
-                  >
-                    <div className="text-left">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_cyan]" />
-                        <span className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.2em]">En curso</span>
-                      </div>
-                      <h4 className={`text-xl font-black transition-colors ${state.isDark ? 'text-white group-hover:text-[#00d2ff]' : 'text-slate-900 group-hover:text-[#00d2ff]'}`}>
-                        {ev.nombre}
-                      </h4>
-                      <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">{ev.responsable} · {ev.fecha}</p>
+                openEvents.map(ev => {
+                  const congelada = (ev as any).estado === 'congelado';
+                  const esBodegaEv = ev.nombre.startsWith('BODEGA -');
+                  return (
+                    <div key={ev.id} className="relative">
+                      <button
+                        onClick={() => {
+                          if (congelada) return; // No entrar a una barra congelada
+                          setShowSelector(false);
+                          if (esBodegaEv) {
+                            setPinInput('');
+                            setPinError(false);
+                            setPinModal({ ev });
+                          } else {
+                            rehydrateFromCloud(ev);
+                          }
+                        }}
+                        className={`w-full group p-8 rounded-[2.5rem] transition-all flex items-center justify-between border-2 ${
+                          congelada
+                            ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                            : state.isDark
+                              ? 'bg-white/5 border-white/5 hover:border-[#00d2ff] hover:bg-white/10'
+                              : 'bg-white border-slate-100 hover:border-[#00d2ff] shadow-sm hover:shadow-xl'
+                        }`}
+                      >
+                        <div className="text-left">
+                          <div className="flex items-center gap-3 mb-2">
+                            {congelada ? (
+                              <>
+                                <span className="text-lg">❄️</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Congelada · Excluida del Global</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_10px_cyan]" />
+                                <span className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.2em]">En curso</span>
+                              </>
+                            )}
+                          </div>
+                          <h4 className={`text-xl font-black transition-colors ${congelada ? 'text-slate-400' : state.isDark ? 'text-white group-hover:text-[#00d2ff]' : 'text-slate-900 group-hover:text-[#00d2ff]'}`}>
+                            {ev.nombre}
+                          </h4>
+                          <p className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">{ev.responsable} · {ev.fecha}</p>
+                        </div>
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border shadow-sm ${
+                          congelada ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-white dark:bg-white/5 border-slate-100 dark:border-white/10 text-slate-300 group-hover:text-[#00d2ff] group-hover:bg-[#00d2ff]/10 group-hover:border-[#00d2ff]/20'
+                        }`}>
+                          <ChevronRight size={20} strokeWidth={3} />
+                        </div>
+                      </button>
+
+                      {/* BUG 3 FIX: Botón congelar/descongelar (solo en barras normales, no bodega) */}
+                      {!esBodegaEv && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const pin = prompt(`PIN de Admin para ${congelada ? 'descongelar' : 'congelar'} "${ev.nombre}":`);
+                            if (pin === PIN_BODEGA) {
+                              handleCongelarBarra(ev.id, !congelada);
+                            } else if (pin !== null) {
+                              alert('PIN incorrecto');
+                            }
+                          }}
+                          className={`absolute top-4 right-4 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            congelada
+                              ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                              : 'bg-slate-100 text-slate-500 hover:bg-amber-100 hover:text-amber-700'
+                          }`}
+                          title={congelada ? 'Descongelar barra' : 'Congelar barra (excluir del global sin cerrar)'}
+                        >
+                          {congelada ? '🔥 Descongelar' : '❄️ Congelar'}
+                        </button>
+                      )}
                     </div>
-                    <div className="w-12 h-12 rounded-2xl bg-white dark:bg-white/5 flex items-center justify-center text-slate-300 group-hover:text-[#00d2ff] group-hover:bg-[#00d2ff]/10 transition-all border border-slate-100 dark:border-white/10 group-hover:border-[#00d2ff]/20 shadow-sm">
-                      <ChevronRight size={20} strokeWidth={3} />
-                    </div>
-                  </button>
-                ))
+                  );
+                })
               ) : (
                 <div className="text-center py-12">
                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No hay otras barras abiertas</p>
