@@ -425,7 +425,7 @@ export default function MonitorBarras({ barEvents, productos, isDark, onCongelar
                     const barColor = BAR_COLORS[barIdx % BAR_COLORS.length];
                     return (
                       <div
-                        key={act.id}
+                        key={`${act.id}-${i}`}
                         className={`flex items-start gap-4 p-4 rounded-2xl border animate-in slide-in-from-top-1 ${meta.bg}`}
                         style={{ animationDelay: `${i * 20}ms` }}
                       >

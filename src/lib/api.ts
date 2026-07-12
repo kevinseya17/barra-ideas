@@ -116,6 +116,40 @@ export async function getEventoData(eventoId: string) {
   };
 }
 
+export async function getEventoGlobalData(baseName: string) {
+  const { data: allEvents } = await supabase.from('eventos').select('id, nombre');
+  if (!allEvents) return null;
+  const relatedEvents = allEvents.filter(e => 
+    e.nombre === `BODEGA - ${baseName}` || 
+    e.nombre === baseName || 
+    e.nombre.startsWith(`${baseName} - `)
+  );
+  
+  const eventIds = relatedEvents.map(e => e.id);
+  if (eventIds.length === 0) return null;
+
+  const [recargas, cortesias, perdidas, descuentos, gastos, inventario, dineros] = await Promise.all([
+    supabase.from('recargas').select('*').in('evento_id', eventIds),
+    supabase.from('cortesias').select('*').in('evento_id', eventIds),
+    supabase.from('perdidas').select('*').in('evento_id', eventIds),
+    supabase.from('descuentos').select('*').in('evento_id', eventIds),
+    supabase.from('gastos').select('*').in('evento_id', eventIds),
+    supabase.from('inventario_items').select('*').in('evento_id', eventIds),
+    supabase.from('cierres_dinero').select('*').in('evento_id', eventIds),
+  ]);
+
+  return {
+    relatedEvents,
+    recargas: recargas.data || [],
+    cortesias: cortesias.data || [],
+    perdidas: perdidas.data || [],
+    descuentos: descuentos.data || [],
+    gastos: gastos.data || [],
+    inventario: inventario.data || [],
+    dineros: dineros.data || [],
+  };
+}
+
 export async function createEvento(evento: Omit<Evento, 'id' | 'estado' | 'created_at'>): Promise<Evento | null> {
   const { data, error } = await supabase.from('eventos').insert([{ ...evento, estado: 'abierto' }]).select().single();
   if (error) {

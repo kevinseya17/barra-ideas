@@ -5,6 +5,7 @@ import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from
 import { nowTime } from '@/utils/calculos';
 import { getUmbralesStock } from './AdminPanel';
 import { getQueue } from '@/lib/offlineQueue';
+import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge, SectionHeader } from './UI';
 
 type Tab = 'inventario' | 'recargas' | 'cortesias' | 'perdidas' | 'descuentos' | 'gastos' | 'stock';
@@ -30,12 +31,13 @@ interface Props {
   onUpdateLogEntry: (logId: string, newData: Partial<Recarga & Cortesia & Perdida & Descuento & Gasto>) => void;
   onCierre: () => void;
   onAtras: () => void;
-  onTrasladoBodega?: (productoId: string, cantidad: number) => Promise<void>;
+  onTrasladoBodega?: (productoId: string, cantidad: number, isClone?: boolean) => Promise<void>;
   bodegaData?: { id: string, nombre: string, inventario: any[] } | null;
   consolidadoBarras?: { nombre: string, ventas: number, caja: number, total: number }[];
   otrasBarras?: { id: string, nombre: string }[];
   onTrasladoEntreBarra?: (eventoDestinoId: string, productoId: string, cantidad: number) => Promise<void>;
   onRecibirDeOtraBarra?: (eventoOrigenId: string, productoId: string, cantidad: number) => Promise<void>;
+  globalData?: any;
 }
 
 const PIN_ADMIN = "1234";
@@ -53,8 +55,9 @@ const TIPO_LOG: Record<LogEntry['tipo'], string> = {
 export default function Operacion({
   evento, productos, proveedores, inventarioInicial, recargas, cortesias, perdidas, descuentos, gastos, log,
   onSaveInicial, onAddRecarga, onAddCortesia, onAddPerdida, onAddDescuento, onAddGasto, onRemoveLogEntry, onUpdateLogEntry, onCierre, onAtras,
-  onTrasladoBodega, bodegaData, consolidadoBarras, otrasBarras, onTrasladoEntreBarra, onRecibirDeOtraBarra
+  onTrasladoBodega, bodegaData, consolidadoBarras, otrasBarras, onTrasladoEntreBarra, onRecibirDeOtraBarra, globalData
 }: Props) {
+  const [verGlobal, setVerGlobal] = useState(false);
   const draftKey = useMemo(() => `barrapro_operacion_draft_${evento.nombre}_${evento.fecha}`, [evento.nombre, evento.fecha]);
   const persistentStorage = typeof window !== 'undefined' ? localStorage : null;
 
@@ -229,6 +232,76 @@ export default function Operacion({
     setCargandoTraslado(prodId);
     await onTrasladoBodega(prodId, cant);
     setCargandoTraslado(null);
+  };
+
+  const [cloningBarra, setCloningBarra] = useState(false);
+
+  const handleClonarValores = async (barraId: string) => {
+    if (!barraId || !bodegaData || !onTrasladoBodega) return;
+    setCloningBarra(true);
+    try {
+      const data = await api.getEventoData(barraId);
+      if (!data) throw new Error("No data");
+
+      // Iterar sobre cada producto para ver diferencias
+      // Clonaremos las cantidades iniciales + recargas de bodega
+      const promesas = [];
+      const advertenciasBodega: string[] = [];
+      
+      for (const p of productos) {
+        // Cuánto recibió la OTRA barra
+        const reqOtra = data.recargas
+          .filter((r: any) => r.producto_id === p.id)
+          .reduce((acc: number, r: any) => acc + Number(r.cantidad), 0);
+        const iniOtra = data.inventario
+          .filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial')
+          .reduce((acc: number, i: any) => acc + Number(i.cantidad), 0);
+        
+        const totalOtra = reqOtra + iniOtra;
+
+        // Cuánto he recibido YO (actual barra)
+        const reqActual = recargas
+          .filter(r => r.producto_id === p.id)
+          .reduce((acc, r) => acc + Number(r.cantidad), 0);
+        const iniActual = inventarioInicial[p.id]?.cantidad || 0;
+        
+        const totalActual = reqActual + Number(iniActual);
+        
+        const diff = totalOtra - totalActual;
+        
+        if (diff > 0) {
+          const itemsBodega = bodegaData.inventario || [];
+          const bIni = itemsBodega.filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+          const bRec = (bodegaData as any).recargas?.filter((r: any) => r.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+          const bPer = (bodegaData as any).perdidas?.filter((per: any) => per.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+          const bTotal = bIni + bRec - bPer;
+
+          if (bTotal < diff) {
+            advertenciasBodega.push(`- ${p.nombre} (Bodega tenía ${bTotal}, se transfirieron ${diff})`);
+          }
+
+          // Transferimos directamente desde bodega para igualar la barra original, 
+          // sin limitar por el stock actual de bodega para no bloquear (útil 
+          // cuando se olvidó cargar stock en bodega primero).
+          promesas.push(onTrasladoBodega(p.id, diff, true));
+        }
+      }
+      if (promesas.length > 0) {
+        await Promise.all(promesas);
+        if (advertenciasBodega.length > 0) {
+          alert(`✅ Se clonaron ${promesas.length} productos.\n\n⚠️ AVISO: Los siguientes stock quedaron insuficientes en Bodega:\n${advertenciasBodega.join('\n')}`);
+        } else {
+          alert(`✅ Se han clonado ${promesas.length} productos con éxito.`);
+        }
+      } else {
+        alert("La barra actual ya tiene estas cantidades equivalentes.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error al clonar inventario');
+    } finally {
+      setCloningBarra(false);
+    }
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
@@ -605,10 +678,30 @@ export default function Operacion({
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-xl font-black text-white uppercase tracking-tight">Inventario en Tiempo Real</h3>
-                      <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">Cuadre actual basado en todos los movimientos</p>
+                      <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">
+                        {verGlobal ? 'CUADRE MACRO (TODAS LAS BARRAS)' : 'Cuadre actual basado en todos los movimientos'}
+                      </p>
                     </div>
-                    <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/20">
-                      <BarChart3 size={24} />
+                    <div className="flex items-center gap-4">
+                      {globalData && (
+                        <div className="flex items-center bg-white/10 rounded-xl p-1 backdrop-blur-md border border-white/20">
+                          <button
+                            onClick={() => setVerGlobal(false)}
+                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!verGlobal ? 'bg-white text-[#ff0099] shadow-md' : 'text-white hover:bg-white/10'}`}
+                          >
+                            Bodega Físico
+                          </button>
+                          <button
+                            onClick={() => setVerGlobal(true)}
+                            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${verGlobal ? 'bg-white text-[#00d2ff] shadow-md' : 'text-white hover:bg-white/10'}`}
+                          >
+                            Global
+                          </button>
+                        </div>
+                      )}
+                      <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white border border-white/20">
+                        <BarChart3 size={24} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -618,20 +711,53 @@ export default function Operacion({
                     <thead className="bg-slate-50 border-y border-slate-100">
                       <tr>
                         <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto</th>
-                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Base</th>
+                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Inicial</th>
                         <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-indigo-500">Recargas</th>
-                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-rose-500">Baj./Cort./Desc.</th>
-                        <th className="px-6 py-4 text-right text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">En Barra</th>
+                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-[#00d2ff]">Despachos</th>
+                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-amber-500">Cort.<span className="hidden sm:inline">esías</span></th>
+                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-rose-500">Bajas</th>
+                        <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-cyan-500">Desc.</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{verGlobal ? 'Stock Final' : 'En Bodega'}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {productos.map(p => {
-                        const ini = inventarioInicial[p.id]?.cantidad ?? 0;
-                        const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                        const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                        const per = perdidas.filter(l => l.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                        const descCount = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                        const total = Number(ini) + Number(rec) - Number(cor) - Number(per) - Number(descCount);
+                        let ini = 0, rec = 0, desp = 0, cor = 0, per = 0, descCount = 0;
+
+                        if (verGlobal && globalData) {
+                          ini = globalData.inventario.filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                          // Solo recargas reales: excluir traslados entre barras y devoluciones
+                          rec = globalData.recargas.filter((r: any) => 
+                            r.producto_id === p.id && 
+                            !r.proveedor.startsWith('RETORNO:') && 
+                            !r.proveedor.startsWith('Devolución') && 
+                            !r.proveedor.startsWith('Traslado desde') &&
+                            r.proveedor !== 'BODEGA CENTRAL'
+                          ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                          cor = globalData.cortesias.filter((c: any) => c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                          // Solo bajas reales: excluir traslados entre barras y devoluciones a bodega
+                          per = globalData.perdidas.filter((l: any) => 
+                            l.producto_id === p.id && 
+                            !l.motivo.startsWith('Traslado a ') && 
+                            !l.motivo.startsWith('Traslado enviado') && 
+                            !l.motivo.startsWith('Devolución Bodega') &&
+                            !l.motivo.startsWith('Clonación')
+                          ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                          descCount = globalData.descuentos.filter((d: any) => d.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                          desp = 0; // En global no mostramos despachos internos
+                        } else {
+                          ini = inventarioInicial[p.id]?.cantidad ?? 0;
+                          rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                          cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                          
+                          // Separar traslados de bajas reales
+                          desp = perdidas.filter(l => l.producto_id === p.id && (l.motivo.startsWith('Traslado a ') || l.motivo.startsWith('Devolución'))).reduce((a, b) => a + b.cantidad, 0);
+                          per = perdidas.filter(l => l.producto_id === p.id && !l.motivo.startsWith('Traslado a ') && !l.motivo.startsWith('Devolución')).reduce((a, b) => a + b.cantidad, 0);
+                          
+                          descCount = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                        }
+
+                        const total = ini + rec - desp - cor - per - descCount;
 
                         return (
                           <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
@@ -640,8 +766,11 @@ export default function Operacion({
                               <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{p.categoria}</p>
                             </td>
                             <td className="px-4 py-4 text-center font-bold text-slate-500 text-sm">{ini}</td>
-                            <td className="px-4 py-4 text-center font-bold text-indigo-600 text-sm">+{rec}</td>
-                            <td className="px-4 py-4 text-center font-bold text-rose-400 text-sm">-{cor + per + descCount}</td>
+                            <td className="px-4 py-4 text-center font-bold text-indigo-600 text-sm">{rec > 0 ? `+${rec}` : 0}</td>
+                            <td className="px-4 py-4 text-center font-bold text-[#00d2ff] text-sm">{desp > 0 ? `-${desp}` : 0}</td>
+                            <td className="px-4 py-4 text-center font-bold text-amber-500 text-sm">{cor > 0 ? `-${cor}` : 0}</td>
+                            <td className="px-4 py-4 text-center font-bold text-rose-500 text-sm">{per > 0 ? `-${per}` : 0}</td>
+                            <td className="px-4 py-4 text-center font-bold text-cyan-500 text-sm">{descCount > 0 ? `-${descCount}` : 0}</td>
                             <td className="px-6 py-4 text-right">
                               <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-black ${
                                 total > 0 ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100' : 'bg-slate-100 text-slate-400'
@@ -656,9 +785,11 @@ export default function Operacion({
                   </table>
                 </div>
                 
-                <div className="p-6 bg-slate-50/50 border-t border-slate-100">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase text-center tracking-widest italic">
-                    * Los valores reflejan el stock físico que debería haber en el estante en este momento.
+                <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase text-center sm:text-left tracking-widest italic">
+                    {verGlobal 
+                      ? '* Los valores globales consolidan el inventario macro y todas las mermas registradas por todas las barras del evento.' 
+                      : '* Los valores reflejan el stock físico que debería haber en el estante en este momento.'}
                   </p>
                 </div>
               </Card>
@@ -713,6 +844,35 @@ export default function Operacion({
                       </div>
                       <Badge color="brand">CONECTADO</Badge>
                     </div>
+
+                    {otrasBarras && otrasBarras.length > 0 && (
+                      <div className="mb-8 p-5 rounded-2xl bg-white border border-cyan-100 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm animate-in fade-in">
+                        <div>
+                          <p className="text-sm font-black text-slate-800 uppercase">Clonar pedidos de otra barra</p>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Solicita a bodega automáticamente lo que ya se entregó a otra barra</p>
+                        </div>
+                        <div className="flex w-full md:w-auto gap-2">
+                           <select id="clonar_barra" className="flex-1 md:w-48 h-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold px-3 outline-none focus:border-[#00d2ff]">
+                              <option value="">Selecciona barra...</option>
+                              {otrasBarras.filter(b => b.id !== evento.nombre).map(b => (
+                                <option key={b.id} value={b.id}>{b.nombre}</option>
+                              ))}
+                           </select>
+                           <button 
+                             disabled={cloningBarra}
+                             onClick={() => {
+                               const sel = document.getElementById('clonar_barra') as HTMLSelectElement;
+                               if(sel.value) handleClonarValores(sel.value);
+                             }}
+                             className={`px-5 h-10 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 ${
+                               cloningBarra ? 'bg-slate-200 text-slate-400' : 'bg-[#00d2ff] text-white hover:bg-cyan-500 shadow-md shadow-cyan-200'
+                             }`}
+                           >
+                             {cloningBarra ? <RefreshCw size={14} className="animate-spin" /> : 'Clonar'}
+                           </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {productos.map(p => {
@@ -776,9 +936,12 @@ export default function Operacion({
                     </div>
                     <div className="space-y-3">
                       {productos.map(p => {
-                        const stockBarra = (inventarioInicial[p.id]?.cantidad || 0)
-                          + recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0)
-                          - perdidas.filter(per => per.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                        const ini = inventarioInicial[p.id]?.cantidad || 0;
+                        const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                        const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                        const per = perdidas.filter(per => per.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                        const desc = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                        const stockBarra = ini + rec - cor - per - desc;
                         if (stockBarra <= 0) return null;
                         return (
                           <div key={p.id} className="flex flex-col gap-2 p-3 bg-white rounded-2xl border border-violet-100">
