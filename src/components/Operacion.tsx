@@ -1,12 +1,13 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, Percent, Banknote, Trash2, Pencil, ShieldCheck, ChevronDown, ArrowLeftRight } from 'lucide-react';
+import { RefreshCw, Gift, AlertTriangle, Package, Clock, Printer, X, BarChart3, Percent, Banknote, Trash2, Pencil, ShieldCheck, ChevronDown, ArrowLeftRight, FileSpreadsheet } from 'lucide-react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Descuento, Gasto } from '@/types';
 import { nowTime } from '@/utils/calculos';
 import { getUmbralesStock } from './AdminPanel';
 import { getQueue } from '@/lib/offlineQueue';
 import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge, SectionHeader } from './UI';
+import ExcelPreview from './ExcelPreview';
 
 type Tab = 'inventario' | 'recargas' | 'cortesias' | 'perdidas' | 'descuentos' | 'gastos' | 'stock';
 
@@ -92,6 +93,7 @@ export default function Operacion({
   });
   const [guardadoInv, setGuardadoInv] = useState(Object.keys(inventarioInicial).length > 0);
   const [ticket, setTicket] = useState<LogEntry | null>(null);
+  const [showExcelPreview, setShowExcelPreview] = useState(false);
 
   useEffect(() => {
     const hydrateDraft = () => {
@@ -184,6 +186,15 @@ export default function Operacion({
 
   const pName = (id: string) => productos.find(x => x.id === id)?.nombre ?? id;
 
+  const getStockBarra = (prodId: string) => {
+    const ini = inventarioInicial[prodId]?.cantidad || 0;
+    const rec = recargas.filter(r => r.producto_id === prodId).reduce((a, b) => a + Number(b.cantidad), 0);
+    const cor = cortesias.filter(c => c.producto_id === prodId).reduce((a, b) => a + Number(b.cantidad), 0);
+    const per = perdidas.filter(l => l.producto_id === prodId).reduce((a, b) => a + Number(b.cantidad), 0);
+    const desc = descuentos.filter(d => d.producto_id === prodId).reduce((a, b) => a + Number(b.cantidad), 0);
+    return Math.max(0, ini + rec - cor - per - desc);
+  };
+
   const saveInv = () => {
     const inv = Object.fromEntries(
       Object.entries(invLocal).map(([k, v]) => [k, { cantidad: Number(v.cantidad || 0), proveedor: v.proveedor }])
@@ -222,6 +233,7 @@ export default function Operacion({
   };
 
   const doGasto = () => {
+    if (!gas.concepto.trim() || !gas.monto || Number(gas.monto) <= 0) return;
     onAddGasto({ evento_id: '', concepto: gas.concepto, monto: Number(gas.monto), metodo: gas.metodo, hora: nowTime() });
     setGas({ concepto: '', monto: '', metodo: 'efectivo' });
   };
@@ -380,8 +392,19 @@ export default function Operacion({
       <div className="flex flex-col lg:flex-row lg:items-start gap-8">
 
         <div className="flex-1 min-w-0 overflow-hidden">
-          <h2 className="text-lg sm:text-2xl font-black text-slate-900 uppercase tracking-tight mb-1">{evento.nombre}</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">{evento.responsable} · En operación</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900 uppercase tracking-tight mb-1">{evento.nombre}</h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{evento.responsable} · En operación</p>
+            </div>
+            <button
+              onClick={() => setShowExcelPreview(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-2xl shadow-md shadow-emerald-200 hover:shadow-lg transition-all active:scale-95 shrink-0"
+            >
+              <FileSpreadsheet size={16} />
+              <span>📊 Vista Previa Excel</span>
+            </button>
+          </div>
 
           {/* MONITOR EN VIVO - COMPACTO Y ELEGANTE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
@@ -689,7 +712,7 @@ export default function Operacion({
                             onClick={() => setVerGlobal(false)}
                             className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!verGlobal ? 'bg-white text-[#ff0099] shadow-md' : 'text-white hover:bg-white/10'}`}
                           >
-                            Bodega Físico
+                            Esta Barra
                           </button>
                           <button
                             onClick={() => setVerGlobal(true)}
@@ -721,66 +744,68 @@ export default function Operacion({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {productos.map(p => {
-                        let ini = 0, rec = 0, desp = 0, cor = 0, per = 0, descCount = 0;
+                      {(() => {
+                        const ORDEN_PICANTE: Record<string, number> = {
+                          gaseosa: 1, agua: 2, cerveza: 3, otro: 4, licor: 5, snack: 6
+                        };
+                        const sortedProductos = [...productos].sort((a, b) => (ORDEN_PICANTE[a.categoria] ?? 99) - (ORDEN_PICANTE[b.categoria] ?? 99));
 
-                        if (verGlobal && globalData) {
-                          ini = globalData.inventario.filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          // Solo recargas reales: excluir traslados entre barras y devoluciones
-                          rec = globalData.recargas.filter((r: any) => 
-                            r.producto_id === p.id && 
-                            !r.proveedor.startsWith('RETORNO:') && 
-                            !r.proveedor.startsWith('Devolución') && 
-                            !r.proveedor.startsWith('Traslado desde') &&
-                            r.proveedor !== 'BODEGA CENTRAL'
-                          ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          cor = globalData.cortesias.filter((c: any) => c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          // Solo bajas reales: excluir traslados entre barras y devoluciones a bodega
-                          per = globalData.perdidas.filter((l: any) => 
-                            l.producto_id === p.id && 
-                            !l.motivo.startsWith('Traslado a ') && 
-                            !l.motivo.startsWith('Traslado enviado') && 
-                            !l.motivo.startsWith('Devolución Bodega') &&
-                            !l.motivo.startsWith('Clonación')
-                          ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          descCount = globalData.descuentos.filter((d: any) => d.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          desp = 0; // En global no mostramos despachos internos
-                        } else {
-                          ini = inventarioInicial[p.id]?.cantidad ?? 0;
-                          rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                          cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                          
-                          // Separar traslados de bajas reales
-                          desp = perdidas.filter(l => l.producto_id === p.id && (l.motivo.startsWith('Traslado a ') || l.motivo.startsWith('Devolución'))).reduce((a, b) => a + b.cantidad, 0);
-                          per = perdidas.filter(l => l.producto_id === p.id && !l.motivo.startsWith('Traslado a ') && !l.motivo.startsWith('Devolución')).reduce((a, b) => a + b.cantidad, 0);
-                          
-                          descCount = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
-                        }
+                        return sortedProductos.map(p => {
+                          let ini = 0, rec = 0, desp = 0, cor = 0, per = 0, descCount = 0;
 
-                        const total = ini + rec - desp - cor - per - descCount;
+                          if (verGlobal && globalData) {
+                            ini = globalData.inventario.filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            rec = globalData.recargas.filter((r: any) => 
+                              r.producto_id === p.id && 
+                              !r.proveedor.startsWith('RETORNO:') && 
+                              !r.proveedor.startsWith('Devolución') && 
+                              !r.proveedor.startsWith('Traslado desde') &&
+                              r.proveedor !== 'BODEGA CENTRAL'
+                            ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            cor = globalData.cortesias.filter((c: any) => c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            per = globalData.perdidas.filter((l: any) => 
+                              l.producto_id === p.id && 
+                              !l.motivo.startsWith('Traslado a ') && 
+                              !l.motivo.startsWith('Traslado enviado') && 
+                              !l.motivo.startsWith('Devolución Bodega') &&
+                              !l.motivo.startsWith('Clonación')
+                            ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            descCount = globalData.descuentos.filter((d: any) => d.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            desp = 0;
+                          } else {
+                            ini = inventarioInicial[p.id]?.cantidad ?? 0;
+                            rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                            cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                            desp = perdidas.filter(l => l.producto_id === p.id && (l.motivo.startsWith('Traslado a ') || l.motivo.startsWith('Devolución'))).reduce((a, b) => a + b.cantidad, 0);
+                            per = perdidas.filter(l => l.producto_id === p.id && !l.motivo.startsWith('Traslado a ') && !l.motivo.startsWith('Devolución')).reduce((a, b) => a + b.cantidad, 0);
+                            descCount = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                          }
 
-                        return (
-                          <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{p.nombre}</p>
-                              <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{p.categoria}</p>
-                            </td>
-                            <td className="px-4 py-4 text-center font-bold text-slate-500 text-sm">{ini}</td>
-                            <td className="px-4 py-4 text-center font-bold text-indigo-600 text-sm">{rec > 0 ? `+${rec}` : 0}</td>
-                            <td className="px-4 py-4 text-center font-bold text-[#00d2ff] text-sm">{desp > 0 ? `-${desp}` : 0}</td>
-                            <td className="px-4 py-4 text-center font-bold text-amber-500 text-sm">{cor > 0 ? `-${cor}` : 0}</td>
-                            <td className="px-4 py-4 text-center font-bold text-rose-500 text-sm">{per > 0 ? `-${per}` : 0}</td>
-                            <td className="px-4 py-4 text-center font-bold text-cyan-500 text-sm">{descCount > 0 ? `-${descCount}` : 0}</td>
-                            <td className="px-6 py-4 text-right">
-                              <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-black ${
-                                total > 0 ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100' : 'bg-slate-100 text-slate-400'
-                              }`}>
-                                {total}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                          const total = ini + rec - desp - cor - per;
+
+                          return (
+                            <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{p.nombre}</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{p.categoria}</p>
+                              </td>
+                              <td className="px-4 py-4 text-center font-bold text-slate-500 text-sm">{ini}</td>
+                              <td className="px-4 py-4 text-center font-bold text-indigo-600 text-sm">{rec > 0 ? `+${rec}` : 0}</td>
+                              <td className="px-4 py-4 text-center font-bold text-[#00d2ff] text-sm">{desp > 0 ? `-${desp}` : 0}</td>
+                              <td className="px-4 py-4 text-center font-bold text-amber-500 text-sm">{cor > 0 ? `-${cor}` : 0}</td>
+                              <td className="px-4 py-4 text-center font-bold text-rose-500 text-sm">{per > 0 ? `-${per}` : 0}</td>
+                              <td className="px-4 py-4 text-center font-bold text-cyan-500 text-sm">{descCount > 0 ? `-${descCount}` : 0}</td>
+                              <td className="px-6 py-4 text-right">
+                                <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-black ${
+                                  total > 0 ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100' : 'bg-slate-100 text-slate-400'
+                                }`}>
+                                  {total}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -794,6 +819,7 @@ export default function Operacion({
                 </div>
               </Card>
             )}
+
 
             {/* RECARGAS */}
             {tab === 'recargas' && (
@@ -812,7 +838,7 @@ export default function Operacion({
                   <div className="sm:col-span-2">
                     <Field label="Producto a Recargar">
                       <select className={inputCls} value={rec.producto_id} onChange={e => setRec(r => ({ ...r, producto_id: e.target.value }))}>
-                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre} — (Disponible: {getStockBarra(p.id)} ud)</option>)}
                       </select>
                     </Field>
                   </div>
@@ -1078,7 +1104,7 @@ export default function Operacion({
                   <div className="lg:col-span-2">
                     <Field label="Producto">
                       <select className={inputCls} value={cor.producto_id} onChange={e => setCor(c => ({ ...c, producto_id: e.target.value }))}>
-                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre} — (Disponible: {getStockBarra(p.id)} ud)</option>)}
                       </select>
                     </Field>
                   </div>
@@ -1134,7 +1160,7 @@ export default function Operacion({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
                   <Field label="Producto">
                     <select className={inputCls} value={per.producto_id} onChange={e => setPer(p => ({ ...p, producto_id: e.target.value }))}>
-                      {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      {productos.map(p => <option key={p.id} value={p.id}>{p.nombre} — (Disponible: {getStockBarra(p.id)} ud)</option>)}
                     </select>
                   </Field>
                   <Field label="Cantidad Afectada">
@@ -1185,7 +1211,7 @@ export default function Operacion({
                   <div className="lg:col-span-2">
                     <Field label="Producto">
                       <select className={inputCls} value={desc.producto_id} onChange={e => setDesc(c => ({ ...c, producto_id: e.target.value }))}>
-                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre} — (Disponible: {getStockBarra(p.id)} ud)</option>)}
                       </select>
                     </Field>
                   </div>
@@ -1694,6 +1720,21 @@ export default function Operacion({
             </div>
           </div>
         </div>
+      )}
+
+      {showExcelPreview && (
+        <ExcelPreview
+          evento={evento}
+          productos={productos}
+          inventarioInicial={inventarioInicial}
+          recargas={recargas}
+          cortesias={cortesias}
+          perdidas={perdidas}
+          descuentos={descuentos}
+          gastos={gastos}
+          globalData={globalData}
+          onClose={() => setShowExcelPreview(false)}
+        />
       )}
 
       <style jsx global>{`

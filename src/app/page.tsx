@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { Producto, Recarga, Cortesia, Perdida, LogEntry, Evento, Gasto, Descuento } from '@/types';
-import { uid, nowTime, calcularResumen } from '@/utils/calculos';
+import { uid, nowTime, calcularResumen, getBaseEventName } from '@/utils/calculos';
 import * as api from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { Moon, Sun, Settings, BarChart3, RefreshCw, AlertTriangle, PackageOpen, History } from 'lucide-react';
@@ -89,7 +89,13 @@ export default function BarraProApp() {
   const [globalData, setGlobalData] = useState<any>(null);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
   const [consolidadoBarras, setConsolidadoBarras] = useState<{ nombre: string, nombreCompleto?: string, ventas: number, caja: number, total: number, efectivo?: number, datafono?: number, nequi?: number, cerrada?: boolean }[]>([]);
-  const otrasBarras = openEvents.filter(e => e.id !== state.evento?.id && !e.nombre.startsWith('BODEGA -'));
+  const [selectedBaseNameFilter, setSelectedBaseNameFilter] = useState<string | null>(null);
+  const currentBaseName = state.evento ? getBaseEventName(state.evento.nombre) : '';
+  const otrasBarras = openEvents.filter(e => 
+    e.id !== state.evento?.id && 
+    !e.nombre.startsWith('BODEGA -') && 
+    (!currentBaseName || getBaseEventName(e.nombre) === currentBaseName)
+  );
   // --- PIN BODEGA ---
   const PIN_BODEGA = '1234'; // Cambia este PIN desde el Panel Admin → para tu hermano
   const [pinModal, setPinModal] = useState<{ ev: Evento } | null>(null);
@@ -114,8 +120,8 @@ export default function BarraProApp() {
     const loadBodega = async () => {
       if (!state.evento?.id) return;
       
-      // Extrae el nombre base del evento actual (quitando ' - Barra X' si aplica)
-      const baseName = state.evento.nombre.replace(/ - Barra \d+$/, '');
+      // Extrae el nombre base del evento actual (quitando ' - Barra X' o 'BODEGA -' si aplica)
+      const baseName = getBaseEventName(state.evento.nombre);
       const expectedBodegaName = `BODEGA - ${baseName}`;
       
       const bodegaEv = openEvents.find(e => e.nombre === expectedBodegaName);
@@ -298,9 +304,10 @@ export default function BarraProApp() {
 
     // SI NO ES BODEGA, BUSCAR LA BODEGA ACTIVA PARA ESTE EVENTO
     if (!ev.nombre.startsWith('BODEGA -')) {
-      const bName = `BODEGA - ${ev.nombre.split(' - ').slice(1).join(' - ') || ev.nombre}`;
+      const baseName = getBaseEventName(ev.nombre);
+      const bName = `BODEGA - ${baseName}`;
       const openEvs = await api.getEventosAbiertos();
-      const bEv = openEvs.find(e => e.nombre === bName || e.nombre.startsWith('BODEGA -'));
+      const bEv = openEvs.find(e => e.nombre === bName);
       if (bEv) {
         const bData = await api.getEventoData(bEv.id);
         setBodegaData({ 
@@ -317,7 +324,7 @@ export default function BarraProApp() {
 
     // SI ES BODEGA, CALCULAR CONSOLIDADO DE BARRAS
     if (ev.nombre.startsWith('BODEGA -')) {
-      const baseEventName = ev.nombre.replace('BODEGA - ', '');
+      const baseEventName = getBaseEventName(ev.nombre);
       // Traer TODAS las barras del evento: abiertas, cerradas y congeladas
       // Las barras que ya cerraron (llegaron al Reporte) deben seguir visibles en la Bodega
       const { data: todasBarras } = await supabase
@@ -327,8 +334,8 @@ export default function BarraProApp() {
         .order('created_at', { ascending: false });
       
       const linkedBarras = (todasBarras || []).filter(e => 
-        e.nombre.includes(baseEventName) && 
-        !e.nombre.startsWith('BODEGA -')
+        !e.nombre.startsWith('BODEGA -') &&
+        getBaseEventName(e.nombre) === baseEventName
       );
       
       const stats = await Promise.all(linkedBarras.map(async (lb) => {
@@ -337,6 +344,7 @@ export default function BarraProApp() {
           api.getCierreDinero(lb.id)
         ]);
         const invInicialLB = Object.fromEntries(lbData.inventario.filter(i => i.tipo === 'inicial').map(i => [i.producto_id, { cantidad: i.cantidad, proveedor: i.proveedor }]));
+        const invFinalLB = Object.fromEntries(lbData.inventario.filter(i => i.tipo === 'final').map(i => [i.producto_id, i.cantidad]));
         
         // BUG 2 FIX: Excluir recargas que son traslados de OTRAS barras para no duplicar
         // en el cálculo del consolidado global de bodega.
@@ -348,7 +356,7 @@ export default function BarraProApp() {
           (p: any) => !String(p.motivo || '').startsWith('Traslado enviado')
         );
         
-        const res = calcularResumen(prods, invInicialLB, recargasSinTraslados, lbData.cortesias, perdidasSinTraslados, lbData.descuentos, {});
+        const res = calcularResumen(prods, invInicialLB, recargasSinTraslados, lbData.cortesias, perdidasSinTraslados, lbData.descuentos, invFinalLB);
         const ventasProyectadas = res.reduce((sum, item) => sum + (item.consumo * (prods.find(p => p.id === item.id)?.precio || 0)), 0);
         return { 
           nombre: lb.nombre.split(' - ').slice(-1)[0] || lb.nombre,
@@ -448,6 +456,7 @@ export default function BarraProApp() {
 
         const openEvs = await api.getEventosAbiertos();
         setOpenEvents(openEvs);
+        setSelectedBaseNameFilter(getBaseEventName(eventoInfo.nombre));
         setShowSelector(true);
         setState(s => ({ ...s, step: 'apertura', evento: null }));
         addLog(`✅ Se crearon ${validos.length} barras ${usaBodega ? 'y una Bodega Central ' : ''}para el evento`, 'info');
@@ -734,16 +743,26 @@ export default function BarraProApp() {
 
   const handleTrasladoBodega = async (productoId: string, cantidad: number, isClone?: boolean) => {
     if (!bodegaData || !state.evento) return;
-    
-    // 1. Crear Recarga en la Barra Actual
-    await handleAddRecarga({
-      producto_id: productoId,
-      cantidad,
-      proveedor: 'BODEGA CENTRAL'
-    });
-
-    // 2. Crear "Pérdida" en la Bodega (Descuento de stock)
     const time = nowTime();
+    const eventoId = state.evento.id;
+    
+    // 1. Sumar al Inventario Inicial de la Barra Actual
+    const currentIni = state.inventarioInicial[productoId]?.cantidad || 0;
+    const newIni = currentIni + cantidad;
+    const provName = 'BODEGA CENTRAL';
+
+    await api.upsertInventarioInicial(eventoId, productoId, newIni, provName);
+
+    // Actualización en vivo de inventarioInicial
+    setState(s => ({
+      ...s,
+      inventarioInicial: {
+        ...s.inventarioInicial,
+        [productoId]: { cantidad: newIni, proveedor: s.inventarioInicial[productoId]?.proveedor || provName }
+      }
+    }));
+
+    // 2. Crear "Pérdida/Despacho" en la Bodega (Descuento de stock en Bodega)
     const perdidaBodega: Perdida = {
       id: uid(),
       evento_id: bodegaData.id,
@@ -764,8 +783,7 @@ export default function BarraProApp() {
       };
     });
 
-    
-    addLog(`📦 Traslado exitoso: ${cantidad} de ${pName(productoId)} desde Bodega`, 'info');
+    addLog(`📦 Despacho de Bodega cargado a Inicial: +${cantidad} de ${pName(productoId)}`, 'info');
   };
 
   // Traslado entre barras (de la barra activa a otra barra)
@@ -787,33 +805,20 @@ export default function BarraProApp() {
     };
     await api.createPerdida(nuevaPerdida);
 
-    // BUG 1 FIX: Actualización optimista inmediata + re-fetch forzado desde BD
     setState(s => ({
       ...s,
       perdidas: [nuevaPerdida, ...s.perdidas.filter(p => p.id !== perdidaId)]
     }));
 
-    // 2. Registrar recarga en la barra destino
-    await api.createRecarga({
-      id: uid(),
-      evento_id: eventoDestinoId,
-      producto_id: productoId,
-      cantidad,
-      proveedor: `Traslado desde ${state.evento.nombre}`,
-      hora: time
-    });
+    // 2. Sumar al inventario inicial de la barra destino
+    const destData = await api.getEventoData(eventoDestinoId);
+    const destIniObj = destData.inventario.find((i: any) => i.producto_id === productoId && i.tipo === 'inicial');
+    const currentDestQty = destIniObj ? Number(destIniObj.cantidad) : 0;
+    const newDestQty = currentDestQty + cantidad;
 
-    // BUG 1 FIX: Re-sincronizar desde BD para garantizar consistencia
-    setTimeout(async () => {
-      const freshData = await api.getEventoData(eventoOrigenId);
-      setState(s => ({
-        ...s,
-        perdidas: freshData.perdidas,
-        recargas: freshData.recargas,
-      }));
-    }, 800);
+    await api.upsertInventarioInicial(eventoDestinoId, productoId, newDestQty, `Traslado desde ${state.evento.nombre}`);
 
-    addLog(`🔄 Traslado enviado: ${cantidad} de ${pName(productoId)} → ${destNombre}`, 'info');
+    addLog(`🔄 Traslado enviado a Inicial: ${cantidad} de ${pName(productoId)} → ${destNombre}`, 'info');
   };
 
   // Recibir de otra barra (la barra activa solicita producto de otra barra)
@@ -833,35 +838,22 @@ export default function BarraProApp() {
       hora: time
     });
 
-    // 2. Registrar recarga en esta barra (la que recibe) — con update optimista
-    const recargaId = uid();
-    const nuevaRecarga: Recarga = {
-      id: recargaId,
-      evento_id: eventoDestinoId,
-      producto_id: productoId,
-      cantidad,
-      proveedor: `Traslado desde ${origenNombre}`,
-      hora: time
-    };
-    await api.createRecarga(nuevaRecarga);
+    // 2. Sumar a Inicial en esta barra (la que recibe)
+    const currentIni = state.inventarioInicial[productoId]?.cantidad || 0;
+    const newIni = currentIni + cantidad;
+    const provName = `Traslado desde ${origenNombre}`;
 
-    // BUG 1 FIX: Actualización optimista + re-fetch forzado
+    await api.upsertInventarioInicial(eventoDestinoId, productoId, newIni, provName);
+
     setState(s => ({
       ...s,
-      recargas: [nuevaRecarga, ...s.recargas.filter(r => r.id !== recargaId)]
+      inventarioInicial: {
+        ...s.inventarioInicial,
+        [productoId]: { cantidad: newIni, proveedor: s.inventarioInicial[productoId]?.proveedor || provName }
+      }
     }));
 
-    // BUG 1 FIX: Re-sincronizar desde BD para garantizar consistencia
-    setTimeout(async () => {
-      const freshData = await api.getEventoData(eventoDestinoId);
-      setState(s => ({
-        ...s,
-        perdidas: freshData.perdidas,
-        recargas: freshData.recargas,
-      }));
-    }, 800);
-
-    addLog(`📥 Recibido: ${cantidad} de ${pName(productoId)} ← ${origenNombre}`, 'info');
+    addLog(`📥 Traslado recibido en Inicial: +${cantidad} de ${pName(productoId)} de ${origenNombre}`, 'info');
   };
 
   const handleCongelarBarra = async (eventoId: string, congelar: boolean) => {
@@ -909,25 +901,36 @@ export default function BarraProApp() {
     await api.closeEvento(state.evento.id);
 
     // DEVOLVER A BODEGA SI SE SOLICITÓ
-    if (devolverABodega && bodegaData) {
-      const time = nowTime();
-      const itemsRetorno = Object.entries(inventarioFinal)
-        .filter(([_, cant]) => cant > 0)
-        .map(([prodId, cant]) => ({
-          id: uid(),
-          evento_id: bodegaData.id,
-          producto_id: prodId,
-          cantidad: cant,
-          proveedor: `RETORNO: ${state.evento!.nombre}`,
-          hora: time
-        }));
-      
-      // Procesar recargas de retorno en bodega
-      for (const item of itemsRetorno) {
-        await api.createRecarga(item);
+    if (devolverABodega) {
+      let bId = bodegaData?.id;
+      if (!bId) {
+        const baseName = getBaseEventName(state.evento.nombre);
+        const bName = `BODEGA - ${baseName}`;
+        const openEvs = await api.getEventosAbiertos();
+        const bEv = openEvs.find(e => e.nombre === bName);
+        if (bEv) bId = bEv.id;
       }
-      
-      addLog(`🔄 ${itemsRetorno.length} productos devueltos a Bodega Central`, 'info');
+
+      if (bId) {
+        const time = nowTime();
+        const itemsRetorno = Object.entries(inventarioFinal)
+          .filter(([_, cant]) => cant > 0)
+          .map(([prodId, cant]) => ({
+            id: uid(),
+            evento_id: bId,
+            producto_id: prodId,
+            cantidad: cant,
+            proveedor: `RETORNO: ${state.evento!.nombre}`,
+            hora: time
+          }));
+        
+        // Procesar recargas de retorno en bodega
+        for (const item of itemsRetorno) {
+          await api.createRecarga(item);
+        }
+        
+        addLog(`🔄 ${itemsRetorno.length} productos devueltos a Bodega Central`, 'info');
+      }
     }
   };
 
@@ -1011,6 +1014,13 @@ export default function BarraProApp() {
   targetRec.forEach(r => {
     const prod = state.productos.find(p => p.id === r.producto_id);
     if (!prod || !r.proveedor) return;
+    // Excluir movimientos internos: bodega, traslados y retornos no son deudas a proveedores
+    if (
+      r.proveedor.startsWith('BODEGA') ||
+      r.proveedor.startsWith('Traslado') ||
+      r.proveedor.startsWith('RETORNO:') ||
+      r.proveedor.startsWith('Devolución')
+    ) return;
     deudas[r.proveedor] = (deudas[r.proveedor] || 0) + r.cantidad * prod.costo;
   });
 
@@ -1019,7 +1029,7 @@ export default function BarraProApp() {
   // Trigger Global Data Fetching for Bodega Reporting & Live View
   useEffect(() => {
     if (!esBodega || !state.evento) return;
-    const baseName = state.evento.nombre.replace(/^BODEGA - /, '');
+    const baseName = getBaseEventName(state.evento.nombre);
     const fetchGlobal = () => {
       api.getEventoGlobalData(baseName).then(data => {
          setGlobalData(data);
@@ -1125,8 +1135,11 @@ export default function BarraProApp() {
         .dark .text-magenta-600, .dark .text-[#ff0099] { color: #ff4db8 !important; }
         .dark .bg-magenta-50 { background-color: rgba(255, 0, 153, 0.1) !important; border-color: rgba(255, 0, 153, 0.2) !important; }
         
-        .dark input, .dark select { background-color: rgba(255,255,255,0.03) !important; color: #ffffff !important; border-color: rgba(255,255,255,0.15) !important; }
-        .dark input:focus, .dark select:focus { border-color: #00d2ff !important; background-color: rgba(255,255,255,0.05) !important; }
+        select option { background-color: #ffffff !important; color: #0f172a !important; }
+        .dark select { background-color: #0f172a !important; color: #ffffff !important; border-color: rgba(255,255,255,0.2) !important; }
+        .dark option, .dark select option { background-color: #0f172a !important; color: #ffffff !important; }
+        .dark input { background-color: rgba(255,255,255,0.05) !important; color: #ffffff !important; border-color: rgba(255,255,255,0.15) !important; }
+        .dark input:focus, .dark select:focus { border-color: #00d2ff !important; background-color: #1e293b !important; }
         .dark input::placeholder { color: #9ca3af !important; }
         .dark .bg-slate-100\\/50 { background-color: rgba(255,255,255,0.05) !important; border-color: rgba(255,255,255,0.1) !important; }
         .dark .bg-indigo-600 { background: linear-gradient(to right, #00d2ff, #ff0099) !important; border: none !important; }
@@ -1233,11 +1246,11 @@ export default function BarraProApp() {
               {/* MONITOR CENTRAL — Solo visible para la Bodega */}
               {state.evento.nombre.startsWith('BODEGA -') && (() => {
                 // Solo mostrar barras del MISMO evento base que la bodega
-                const baseName = state.evento.nombre.replace(/^BODEGA - /, '');
+                const baseName = getBaseEventName(state.evento.nombre);
                 const barrasDelEvento = openEvents.filter(e =>
                   !e.nombre.startsWith('BODEGA -') &&
                   e.id !== state.evento!.id &&
-                  (e.nombre.includes(baseName) || e.nombre.replace(/ - Barra \d+$/, '') === baseName)
+                  getBaseEventName(e.nombre) === baseName
                 );
                 return (
                   <div className={`mb-8 p-6 sm:p-8 rounded-[2.5rem] border-2 shadow-xl ${
@@ -1311,6 +1324,7 @@ export default function BarraProApp() {
               invInicial={esBodega && globalData ? gIni : state.inventarioInicial}
               dinero={state.dinero} 
               log={state.log}
+              globalData={esBodega ? globalData : null}
               onNuevoEvento={() => { localStorage.removeItem(STORAGE_KEY); setState(INIT); }} 
               onSiguienteNoche={handleSiguienteNoche}
               onAtras={() => setState(s => ({ ...s, step: 'cierre' }))}
@@ -1344,13 +1358,49 @@ export default function BarraProApp() {
             
             <div className="p-10 space-y-4 max-h-[60vh] overflow-y-auto">
               {(() => {
-                const baseNameForFilter = state.evento ? state.evento.nombre.replace(/^BODEGA - /, '').split(' - ')[0] : null;
-                const displayedEvents = baseNameForFilter 
-                  ? openEvents.filter(ev => ev.nombre.includes(baseNameForFilter)) 
+                const currentBaseName = state.evento ? getBaseEventName(state.evento.nombre) : null;
+                const activeFilter = selectedBaseNameFilter !== null 
+                  ? selectedBaseNameFilter 
+                  : currentBaseName;
+
+                // Sacar todos los nombres base únicos de eventos abiertos
+                const allBaseNames = Array.from(new Set(openEvents.map(ev => getBaseEventName(ev.nombre))));
+
+                const displayedEvents = (activeFilter && activeFilter !== 'TODOS')
+                  ? openEvents.filter(ev => getBaseEventName(ev.nombre) === activeFilter)
                   : openEvents;
 
                 return (
                   <>
+                    {allBaseNames.length > 1 && (
+                      <div className="flex flex-wrap items-center gap-2 mb-6 p-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Filtrar por Evento:</span>
+                        {allBaseNames.map(bName => (
+                          <button
+                            key={bName}
+                            onClick={() => setSelectedBaseNameFilter(bName)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                              activeFilter === bName
+                                ? 'bg-gradient-to-r from-[#00d2ff] to-[#ff0099] text-white shadow-md'
+                                : 'bg-white dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                            }`}
+                          >
+                            {bName}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setSelectedBaseNameFilter('TODOS')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                            activeFilter === 'TODOS'
+                              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md'
+                              : 'bg-white dark:bg-white/10 text-slate-400 hover:bg-slate-200'
+                          }`}
+                        >
+                          Ver Todos ({openEvents.length})
+                        </button>
+                      </div>
+                    )}
+
                     {displayedEvents.length > 0 ? (
                       displayedEvents.map(ev => {
                   const congelada = (ev as any).estado === 'congelado';
@@ -1447,12 +1497,12 @@ export default function BarraProApp() {
                 </div>
               )}
 
-              {baseNameForFilter && state.evento && (
+              {currentBaseName && state.evento && (
                  <button
                    onClick={async () => {
                       const barName = prompt('Nombre para la nueva barra (ej: Barra 3):');
                       if (!barName) return;
-                      const nuevoNombre = `${baseNameForFilter} - ${barName}`;
+                      const nuevoNombre = `${currentBaseName} - ${barName}`;
                       try {
                         const ev = await api.createEvento({
                           nombre: nuevoNombre,

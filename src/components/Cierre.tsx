@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { Package, Calculator, TrendingUp, DollarSign, AlertCircle, ArrowDownCircle, ArrowUpCircle, Boxes, BarChart3 } from 'lucide-react';
+import { Package, Calculator, TrendingUp, DollarSign, AlertCircle, ArrowDownCircle, ArrowUpCircle, Boxes, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Producto, Descuento } from '@/types';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
 import { calcularResumen, fmt } from '@/utils/calculos';
+import ExcelPreview from './ExcelPreview';
 
 interface CierreDraft {
   fin: Record<string, string>;
@@ -42,6 +43,7 @@ export default function Cierre({
   esBodega, bodegaMovimientos, consolidadoBarras
 }: Props) {
   const [devolverABodega, setDevolverABodega] = React.useState(true);
+  const [showExcelPreview, setShowExcelPreview] = React.useState(false);
   const fin = draft.fin;
   const dinero = draft.dinero;
 
@@ -340,11 +342,20 @@ export default function Cierre({
   // ─── RENDER MODO BARRA (comportamiento original) ─────────────────────────
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <SectionHeader
-        step="03 CIERRE"
-        title="Cierre de Caja y Cuadre"
-        sub="Ingrese el conteo físico final y el total de dinero recaudado para generar el informe."
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <SectionHeader
+          step="03 CIERRE"
+          title="Cierre de Caja y Cuadre"
+          sub="Ingrese el conteo físico final y el total de dinero recaudado para generar el informe."
+        />
+        <button
+          onClick={() => setShowExcelPreview(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-2xl shadow-md shadow-emerald-200 hover:shadow-lg transition-all active:scale-95 shrink-0"
+        >
+          <FileSpreadsheet size={16} />
+          <span>📊 Vista Previa Excel</span>
+        </button>
+      </div>
 
       {/* Panel de Status en Tiempo Real */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -402,9 +413,9 @@ export default function Cierre({
             const descUnd = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
             const descValor = descuentos.filter(d => d.producto_id === p.id).reduce((a, b) => a + Number((b as any).valor_descontado || 0), 0);
 
-            const vendidoUnd = consumoUnd !== null ? Math.max(0, consumoUnd - corUnd - perUnd - descUnd) : null;
+            const vendidoUnd = consumoUnd !== null ? Math.max(0, consumoUnd - corUnd - perUnd) : null;
             const vendidoValor = vendidoUnd !== null
-              ? (vendidoUnd * p.precio) + (descUnd * p.precio) - descValor
+              ? Math.max(0, (vendidoUnd * p.precio) - descValor)
               : null;
             return (
               <div key={p.id} className="p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-cyan-200 transition-all group">
@@ -515,6 +526,25 @@ export default function Cierre({
           Finalizar y Generar Reporte →
         </Btn>
       </div>
+
+      {showExcelPreview && (
+        <ExcelPreview
+          evento={evento}
+          productos={productos}
+          inventarioInicial={inventarioInicial}
+          recargas={recargas}
+          cortesias={cortesias}
+          perdidas={perdidas}
+          descuentos={descuentos}
+          finCount={Object.fromEntries(Object.entries(fin).map(([k, v]) => [k, Number(v || 0)]))}
+          dinero={{
+            efectivo: Number(dinero.efectivo || 0),
+            datafono: Number(dinero.datafono || 0),
+            nequi: Number(dinero.nequi || 0),
+          }}
+          onClose={() => setShowExcelPreview(false)}
+        />
+      )}
     </div>
   );
 }

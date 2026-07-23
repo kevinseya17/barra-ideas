@@ -102,7 +102,7 @@ export const Field: React.FC<FieldProps> = ({ label, children, error, icon }) =>
 
 // ── Input base classes ────────────────────────────────────────────────────────
 export const inputCls =
-  'w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 font-medium placeholder:text-slate-300 focus:outline-none focus:border-[#00d2ff] focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm';
+  'w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white font-medium placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:outline-none focus:border-[#00d2ff] focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-sm';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 interface StatProps {

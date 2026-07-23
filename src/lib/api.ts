@@ -222,6 +222,32 @@ export async function saveInventarioBatch(items: Omit<InventarioItem, 'id'>[]): 
   }
 }
 
+export async function upsertInventarioInicial(eventoId: string, productoId: string, cantidad: number, proveedor: string): Promise<boolean> {
+  try {
+    await supabase.from('inventario_items')
+      .delete()
+      .eq('evento_id', eventoId)
+      .eq('tipo', 'inicial')
+      .eq('producto_id', productoId);
+
+    if (cantidad > 0) {
+      const { error } = await supabase.from('inventario_items').insert([{
+        evento_id: eventoId,
+        producto_id: productoId,
+        tipo: 'inicial',
+        cantidad,
+        proveedor
+      }]);
+      if (error) console.error('Error upserting inventario inicial:', JSON.stringify(error));
+      return !error;
+    }
+    return true;
+  } catch (err: any) {
+    console.error('Error en upsertInventarioInicial:', err);
+    return false;
+  }
+}
+
 // OPERACIONES (Ahora aceptamos el ID del frontend)
 export async function createRecarga(recarga: Recarga): Promise<boolean> {
   const { error } = await supabase.from('recargas').insert([recarga]);

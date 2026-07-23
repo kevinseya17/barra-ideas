@@ -2,7 +2,7 @@
 import React from 'react';
 import { Download, RefreshCw, TrendingUp, TrendingDown, DollarSign, Package, ArrowLeft, Lightbulb, AlertCircle, CheckCircle2, Banknote, FileText, Printer } from 'lucide-react';
 import { ResumenProducto } from '@/types';
-import { fmt, exportarExcel, exportarPDF, exportarExcelSimple } from '@/utils/calculos';
+import { fmt, exportarExcel, exportarPDF, exportarExcelSimple, exportarExcelPicante } from '@/utils/calculos';
 import { Btn, Card, Stat, Badge, catColor, SectionHeader } from './UI';
 import Dashboard from './Dashboard';
 
@@ -20,12 +20,13 @@ interface Props {
   log: any[];
   soloLectura?: boolean;
   consolidadoBarras?: { nombre: string; ventas: number; caja: number }[];
+  globalData?: any;
   onNuevoEvento: () => void;
   onSiguienteNoche: () => void;
   onAtras: () => void;
 }
 
-export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, soloLectura, consolidadoBarras, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
+export default function Reporte({ evento, resumen, recargas, cortesias, perdidas, descuentos, gastos, productos, invInicial, dinero, log, soloLectura, consolidadoBarras, globalData, onNuevoEvento, onSiguienteNoche, onAtras }: Props) {
   const totalVentas = resumen.reduce((a, b) => a + b.ingresoEsperado, 0);
   const totalDescuentos = resumen.reduce((a, b) => a + (b.valorDescontadoTotales || 0), 0);
   const totalCortesiasVenta = resumen.reduce((a, b) => a + (b.valorCortesiaTotales || 0), 0);
@@ -41,7 +42,13 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
 
   const pName = (id: string) => productos.find(p => p.id === id)?.nombre || id;
 
-  const doExport = () => exportarExcel(resumen, productos, evento.nombre, evento.fecha, dinero.efectivo, dinero.datafono, dinero.nequi, evento.caja_inicial || 0, deudas, log, gastos, recargas, cortesias, perdidas, descuentos);
+  const doExport = () => {
+    if (globalData) {
+      exportarExcelPicante(evento.nombre, evento.fecha, productos, globalData);
+    } else {
+      exportarExcel(resumen, productos, evento.nombre, evento.fecha, dinero.efectivo, dinero.datafono, dinero.nequi, evento.caja_inicial || 0, deudas, log, gastos, recargas, cortesias, perdidas, descuentos);
+    }
+  };
 
   // Cálculo de Cuentas por Pagar por Proveedor (Consumo Real)
   const deudas: Record<string, number> = {};
@@ -97,7 +104,7 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
             Imprimir / PDF
           </Btn>
           <Btn variant="brand" icon={<Download size={16} />} onClick={doExport}>
-            Exportar Informe CSV
+            Exportar Informe Excel
           </Btn>
         </div>
         {!soloLectura && (
@@ -526,14 +533,14 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
                     <td className="py-4 px-2 text-center font-bold text-amber-500 bg-amber-50/30">{p.cor}</td>
                     <td className="py-4 px-2 text-center font-bold text-cyan-500 bg-cyan-50/30">{p.desc || 0}</td>
                     <td className="py-4 px-2 text-center font-bold text-rose-500 bg-rose-50/30">{p.per}</td>
-                    <td className="py-4 px-2 text-center font-black text-slate-900 bg-slate-50 group-hover:bg-cyan-50 transition-colors">{p.vendido}</td>
+                    <td className="py-4 px-2 text-center font-black text-slate-900 bg-slate-50 group-hover:bg-cyan-50 transition-colors">{p.vendido + (p.desc || 0)}</td>
                     <td className="py-4 px-2 text-right font-black text-cyan-600 whitespace-nowrap">{fmt(p.ingresoEsperado)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-slate-900 text-white">
-                  <td colSpan={6} className="py-4 px-4 font-bold text-right text-xs uppercase tracking-[0.2em] rounded-bl-3xl">Total Ingreso por Ventas</td>
+                  <td colSpan={7} className="py-4 px-4 font-bold text-right text-xs uppercase tracking-[0.2em] rounded-bl-3xl">Total Ingreso por Ventas</td>
                   <td className="py-4 px-4 font-black text-right text-lg rounded-br-3xl">{fmt(totalVentas)}</td>
                 </tr>
               </tfoot>
