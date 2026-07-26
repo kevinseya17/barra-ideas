@@ -98,10 +98,11 @@ export default function ExcelPreview({
                       <th className="p-3 border-r border-slate-700/60 text-center bg-slate-800/80">INICIAL</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-indigo-950/40 text-indigo-300">RECARGAS</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-amber-950/40 text-amber-300">CORTESÍAS</th>
+                      {isBodega && <th className="p-3 border-r border-slate-700/60 text-center bg-cyan-950/60 text-cyan-300">DESPACHOS→BARRAS</th>}
                       <th className="p-3 border-r border-slate-700/60 text-center bg-rose-950/40 text-rose-300">BAJAS</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-cyan-950/40 text-cyan-300">FINAL</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-emerald-950/60 text-emerald-300">VENDIDO (UND)</th>
-                      <th className="p-3 text-right bg-emerald-950/80 text-emerald-400">VENTA TOTAL ($)</th>
+                      {!isBodega && <th className="p-3 border-r border-slate-700/60 text-center bg-emerald-950/60 text-emerald-300">VENDIDO (UND)</th>}
+                      {!isBodega && <th className="p-3 text-right bg-emerald-950/80 text-emerald-400">VENTA TOTAL ($)</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80 text-slate-200">
@@ -110,7 +111,7 @@ export default function ExcelPreview({
                       return (
                         <React.Fragment key={cat}>
                           <tr className="bg-slate-800/40 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                            <td colSpan={10} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
+                            <td colSpan={isBodega ? 10 : 10} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
                               ▶ CATEGORÍA: {cat}
                             </td>
                           </tr>
@@ -118,10 +119,21 @@ export default function ExcelPreview({
                             const ini = Number(inventarioInicial[p.id]?.cantidad || 0);
                             const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
                             const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
-                            const per = perdidas.filter(l => l.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
-                            const fin = finCount[p.id] !== undefined ? Number(finCount[p.id]) : Math.max(0, ini + rec - cor - per);
+                            // Despachos de bodega a barras (NO son bajas)
+                            const despachos = isBodega
+                              ? perdidas.filter(l => l.producto_id === p.id && (l.motivo?.startsWith('Traslado a ') || l.motivo?.startsWith('Clonación hacia '))).reduce((a, b) => a + Number(b.cantidad), 0)
+                              : 0;
+                            // Bajas reales: excluir traslados a barras/bodega y clonaciones
+                            const per = perdidas.filter(l =>
+                              l.producto_id === p.id &&
+                              !l.motivo?.startsWith('Traslado a ') &&
+                              !l.motivo?.startsWith('Traslado enviado') &&
+                              !l.motivo?.startsWith('Clonación') &&
+                              !l.motivo?.startsWith('Devolución')
+                            ).reduce((a, b) => a + Number(b.cantidad), 0);
+                            const fin = finCount[p.id] !== undefined ? Number(finCount[p.id]) : Math.max(0, ini + rec - despachos - cor - per);
                             const consumo = Math.max(0, ini + rec - fin);
-                            const vendidoUnd = Math.max(0, consumo - cor - per);
+                            const vendidoUnd = Math.max(0, consumo - cor - per - despachos);
                             const ventaTotal = vendidoUnd * p.precio;
 
                             return (
@@ -132,10 +144,11 @@ export default function ExcelPreview({
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{ini}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{rec > 0 ? `+${rec}` : '0'}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{cor > 0 ? cor : '0'}</td>
+                                {isBodega && <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-300">{despachos > 0 ? `-${despachos}` : '0'}</td>}
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{per > 0 ? per : '0'}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{fin}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400 bg-emerald-950/20">{vendidoUnd}</td>
-                                <td className="p-3 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>
+                                {!isBodega && <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400 bg-emerald-950/20">{vendidoUnd}</td>}
+                                {!isBodega && <td className="p-3 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>}
                               </tr>
                             );
                           })}
