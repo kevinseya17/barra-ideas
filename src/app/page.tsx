@@ -990,12 +990,18 @@ export default function BarraProApp() {
     }
   }
 
+  // Para barras normales: excluir traslados enviados a otras barras del cálculo de pérdidas.
+  // Los traslados son movimientos internos (no pérdidas reales), se identifican por el motivo.
+  const perdidasBarraSinTraslados = state.perdidas.filter(
+    p => !p.motivo?.startsWith('Traslado enviado') && !p.motivo?.startsWith('Traslado a ')
+  );
+
   const resumen = calcularResumen(
     state.productos,
     esBodega && globalData ? gIni : state.inventarioInicial,
     esBodega && globalData ? gRec : state.recargas,
     esBodega && globalData ? gCor : state.cortesias,
-    esBodega && globalData ? gPer : state.perdidas,
+    esBodega && globalData ? gPer : perdidasBarraSinTraslados,
     esBodega && globalData ? gDesc : state.descuentos,
     esBodega && globalData ? gFin : state.inventarioFinal
   );
@@ -1299,7 +1305,7 @@ export default function BarraProApp() {
             <Cierre
               evento={state.evento} productos={state.productos}
               inventarioInicial={state.inventarioInicial} recargas={state.recargas}
-              cortesias={state.cortesias} perdidas={state.perdidas}
+              cortesias={state.cortesias} perdidas={esBodega ? state.perdidas : perdidasBarraSinTraslados}
               descuentos={state.descuentos}
               draft={state.cierreDraft}
               onDraftChange={(draft) => setState(s => ({ ...s, cierreDraft: draft }))}
@@ -1318,7 +1324,7 @@ export default function BarraProApp() {
               productos={state.productos}
               recargas={esBodega && globalData ? gRec : state.recargas}
               cortesias={esBodega && globalData ? gCor : state.cortesias}
-              perdidas={esBodega && globalData ? gPer : state.perdidas}
+              perdidas={esBodega && globalData ? gPer : perdidasBarraSinTraslados}
               descuentos={esBodega && globalData ? gDesc : state.descuentos}
               gastos={esBodega && globalData ? gGas : state.gastos}
               invInicial={esBodega && globalData ? gIni : state.inventarioInicial}
