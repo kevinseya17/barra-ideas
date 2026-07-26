@@ -95,7 +95,6 @@ export default function ExcelPreview({
                       <th className="p-3 border-r border-slate-700/60 text-center w-12 text-slate-500">#</th>
                       <th className="p-3 border-r border-slate-700/60">PRODUCTO</th>
                       <th className="p-3 border-r border-slate-700/60 text-right">PRECIO</th>
-                      <th className="p-3 border-r border-slate-700/60 text-right text-violet-300">COSTO UNIT</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-slate-800/80">INICIAL</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-indigo-950/40 text-indigo-300">RECARGAS</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-amber-950/40 text-amber-300">CORTESÍAS</th>
@@ -112,7 +111,7 @@ export default function ExcelPreview({
                       return (
                         <React.Fragment key={cat}>
                           <tr className="bg-slate-800/40 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                            <td colSpan={isBodega ? 12 : 11} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
+                            <td colSpan={isBodega ? 11 : 10} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
                               ▶ CATEGORÍA: {cat}
                             </td>
                           </tr>
@@ -142,7 +141,6 @@ export default function ExcelPreview({
                                 <td className="p-3 text-center border-r border-slate-800 text-[10px] font-bold text-slate-600">{idx + 1}</td>
                                 <td className="p-3 border-r border-slate-800 font-bold text-slate-100">{p.nombre}</td>
                                 <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
-                                <td className="p-3 border-r border-slate-800 text-right font-mono text-violet-300">{fmt((p as any).costo || 0)}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{ini}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{rec > 0 ? `+${rec}` : '0'}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{cor > 0 ? cor : '0'}</td>
@@ -180,7 +178,6 @@ export default function ExcelPreview({
                         <tr className="bg-slate-800 text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-slate-700">
                           <th className="p-3 border-r border-slate-700">PRODUCTO</th>
                           <th className="p-3 border-r border-slate-700 text-right">PRECIO</th>
-                          <th className="p-3 border-r border-slate-700 text-right text-violet-300">COSTO UNIT</th>
                           <th className="p-3 border-r border-slate-700 text-center">INICIAL</th>
                           <th className="p-3 border-r border-slate-700 text-center text-indigo-400">RECARGAS</th>
                           <th className="p-3 border-r border-slate-700 text-center text-amber-400">CORTESÍAS</th>
@@ -215,7 +212,6 @@ export default function ExcelPreview({
                             <tr key={p.id} className="hover:bg-slate-800/60">
                               <td className="p-3 border-r border-slate-800 font-bold">{p.nombre}</td>
                               <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
-                              <td className="p-3 border-r border-slate-800 text-right font-mono text-violet-300">{fmt((p as any).costo || 0)}</td>
                               <td className="p-3 border-r border-slate-800 text-center">{bIni}</td>
                               <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{bRec}</td>
                               <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{bCor}</td>
