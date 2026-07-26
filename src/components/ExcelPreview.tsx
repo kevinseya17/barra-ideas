@@ -102,7 +102,11 @@ export default function ExcelPreview({
                       <th className="p-3 border-r border-slate-700/60 text-center bg-rose-950/40 text-rose-300">BAJAS</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-cyan-950/40 text-cyan-300">FINAL</th>
                       <th className="p-3 border-r border-slate-700/60 text-center bg-emerald-950/60 text-emerald-300">VENDIDO (UND)</th>
-                      <th className="p-3 text-right bg-emerald-950/80 text-emerald-400">VENTA TOTAL ($)</th>
+                      <th className="p-3 border-r border-slate-700/60 text-right bg-emerald-950/80 text-emerald-400">VENTA TOTAL ($)</th>
+                      <th className="p-3 border-r border-slate-700/60 text-right text-amber-300">COMISIÓN UNIT</th>
+                      <th className="p-3 border-r border-slate-700/60 text-right text-amber-400">TOTAL COMISIÓN</th>
+                      <th className="p-3 border-r border-slate-700/60 text-center bg-indigo-950/60 text-indigo-300">TOTAL PRODUCTO</th>
+                      <th className="p-3 text-right bg-violet-950/80 text-violet-300">COSTO PRODUCTO ($)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80 text-slate-200">
@@ -111,7 +115,7 @@ export default function ExcelPreview({
                       return (
                         <React.Fragment key={cat}>
                           <tr className="bg-slate-800/40 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                            <td colSpan={isBodega ? 11 : 10} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
+                            <td colSpan={isBodega ? 15 : 14} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
                               ▶ CATEGORÍA: {cat}
                             </td>
                           </tr>
@@ -136,6 +140,10 @@ export default function ExcelPreview({
                             const consumo = Math.max(0, ini + rec - fin);
                             const vendidoUnd = Math.max(0, consumo - cor - per - despachos);
                             const ventaTotal = vendidoUnd * p.precio;
+                            const comisionUnit = p.comision || 0;
+                            const totalComision = vendidoUnd * comisionUnit;
+                            const totalProducto = vendidoUnd + cor;
+                            const costoProducto = totalProducto * (p.costo || 0);
 
                             return (
                               <tr key={p.id} className="hover:bg-slate-800/60 transition-colors">
@@ -149,7 +157,11 @@ export default function ExcelPreview({
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{per > 0 ? per : '0'}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{fin}</td>
                                 <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400 bg-emerald-950/20">{vendidoUnd}</td>
-                                <td className="p-3 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>
+                                <td className="p-3 border-r border-slate-800 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>
+                                <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-300">{fmt(comisionUnit)}</td>
+                                <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-400">{fmt(totalComision)}</td>
+                                <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-300 bg-indigo-950/20">{totalProducto}</td>
+                                <td className="p-3 text-right font-mono text-violet-300 bg-violet-950/30">{fmt(costoProducto)}</td>
                               </tr>
                             );
                           })}
@@ -185,7 +197,11 @@ export default function ExcelPreview({
                           <th className="p-3 border-r border-slate-700 text-center text-rose-400">BAJAS</th>
                           <th className="p-3 border-r border-slate-700 text-center text-cyan-400">FINAL</th>
                           <th className="p-3 border-r border-slate-700 text-center text-emerald-400">VENDIDO (UND)</th>
-                          <th className="p-3 text-right text-emerald-400">VENTA TOTAL ($)</th>
+                          <th className="p-3 border-r border-slate-700 text-right text-emerald-400">VENTA TOTAL ($)</th>
+                          <th className="p-3 border-r border-slate-700 text-right text-amber-300">COMISIÓN UNIT</th>
+                          <th className="p-3 border-r border-slate-700 text-right text-amber-400">TOTAL COMISIÓN</th>
+                          <th className="p-3 border-r border-slate-700 text-center text-indigo-300">TOTAL PRODUCTO</th>
+                          <th className="p-3 text-right text-violet-300">COSTO PRODUCTO ($)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800 text-slate-200">
@@ -206,6 +222,10 @@ export default function ExcelPreview({
                           const consumo = Math.max(0, bIni + bRec - bFin);
                           const vendidoUnd = Math.max(0, consumo - bCor - bPer);
                           const ventaVal = vendidoUnd * p.precio;
+                          const comisionUnit = p.comision || 0;
+                          const totalComision = vendidoUnd * comisionUnit;
+                          const totalProducto = vendidoUnd + bCor;
+                          const costoProducto = totalProducto * (p.costo || 0);
 
                           if (bIni + bRec === 0 && bFin === 0) return null;
 
@@ -219,7 +239,11 @@ export default function ExcelPreview({
                               <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{bPer}</td>
                               <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{bFin}</td>
                               <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400">{vendidoUnd}</td>
-                              <td className="p-3 text-right font-black text-emerald-400">{fmt(ventaVal)}</td>
+                              <td className="p-3 border-r border-slate-800 text-right font-black text-emerald-400">{fmt(ventaVal)}</td>
+                              <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-300">{fmt(comisionUnit)}</td>
+                              <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-400">{fmt(totalComision)}</td>
+                              <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-300">{totalProducto}</td>
+                              <td className="p-3 text-right font-mono text-violet-300">{fmt(costoProducto)}</td>
                             </tr>
                           );
                         })}
