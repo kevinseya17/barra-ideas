@@ -212,6 +212,53 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
         </div>
       </Card>
 
+      {/* Resumen Financiero Completo (Modelo Excel Hermano) */}
+      {(() => {
+        const totalCostoMercancia = resumen.reduce((a, b) => a + (b.costoProducto || 0), 0);
+        const totalComisiones = resumen.reduce((a, b) => a + (b.totalComision || 0), 0);
+        const utilidadNeta = totalVentas - totalCostoMercancia - totalComisiones - totalGastosEfectivo;
+
+        return (
+          <Card className="p-8 mb-10 border-indigo-100 bg-slate-900 text-white shadow-xl">
+            <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-emerald-400 uppercase tracking-wide">
+                  📊 Consolidado Financiero & Utilidad Neta
+                </h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
+                  Resumen global según fórmula de costeo y comisiones
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Utilidad Neta Estimada</span>
+                <span className={`text-2xl font-black ${utilidadNeta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {fmt(utilidadNeta)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/60">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">(+) Venta Bruta</p>
+                <p className="text-lg font-black text-emerald-400 mt-1">{fmt(totalVentas)}</p>
+              </div>
+              <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/60">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">(-) Costo Mercancía</p>
+                <p className="text-lg font-black text-rose-400 mt-1">{fmt(totalCostoMercancia)}</p>
+              </div>
+              <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/60">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">(-) Comisiones</p>
+                <p className="text-lg font-black text-amber-400 mt-1">{fmt(totalComisiones)}</p>
+              </div>
+              <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700/60">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">(-) Gastos Operativos</p>
+                <p className="text-lg font-black text-violet-400 mt-1">{fmt(totalGastosEfectivo)}</p>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
         {/* Desglose de Dinero */}
         <Card className="p-8 lg:col-span-1">

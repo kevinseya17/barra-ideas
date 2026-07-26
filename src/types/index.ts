@@ -5,6 +5,7 @@ export interface Producto {
   unidad: 'botella' | 'unidad' | 'caja' | 'lata';
   costo: number;
   precio: number;
+  comision?: number;
   activo?: boolean;
 }
 
@@ -100,6 +101,10 @@ export interface ResumenProducto extends Producto {
   ingresoEsperado: number;
   costoCortesias: number;
   proveedor: string;
+  comision?: number;
+  totalComision?: number;
+  totalProducto?: number;
+  costoProducto?: number;
 }
 
 export interface LogEntry {

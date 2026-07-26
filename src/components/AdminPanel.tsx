@@ -77,6 +77,7 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
       unidad: editProd.unidad,
       precio: editProd.precio,
       costo: editProd.costo,
+      comision: editProd.comision || 0,
     });
     setEditProd(null);
     loadData();
@@ -141,6 +142,7 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
                       <th className="px-4 py-4 text-center">Categoría</th>
                       <th className="px-4 py-4 text-center">Precio</th>
                       <th className="px-4 py-4 text-center">Costo</th>
+                      <th className="px-4 py-4 text-center">Comisión Unit</th>
                       <th className="px-6 py-4 text-right">Acciones</th>
                     </tr>
                   </thead>
@@ -151,6 +153,7 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
                         <td className="px-4 py-4 text-center"><Badge color="slate">{p.categoria}</Badge></td>
                         <td className="px-4 py-4 text-center font-bold text-slate-600">${p.precio.toLocaleString()}</td>
                         <td className="px-4 py-4 text-center font-bold text-slate-600">${p.costo.toLocaleString()}</td>
+                        <td className="px-4 py-4 text-center font-bold text-emerald-600">${(p.comision || 0).toLocaleString()}</td>
                         <td className="px-6 py-4 text-right">
                           <button onClick={() => setEditProd(p)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg mr-2 transition-colors">
                             <Edit2 size={16} />
@@ -295,12 +298,15 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
                   </select>
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <Field label="Costo Base ($)">
                   <input required type="number" className={inputCls} value={editProd.costo} onChange={e => setEditProd({...editProd, costo: Number(e.target.value)})} />
                 </Field>
                 <Field label="Precio Venta ($)">
                   <input required type="number" className={inputCls} value={editProd.precio} onChange={e => setEditProd({...editProd, precio: Number(e.target.value)})} />
+                </Field>
+                <Field label="Comisión ($)">
+                  <input type="number" className={inputCls} value={editProd.comision || 0} onChange={e => setEditProd({...editProd, comision: Number(e.target.value)})} />
                 </Field>
               </div>
               <div className="pt-6 flex justify-end gap-3">

@@ -112,6 +112,11 @@ export const calcularResumen = (
     // Si no hubo consumo real (Disp - Fin <= 0), el ingreso debe ser 0.
     const ingresoEsperado = consumo > 0 ? (ingresoVentaNormal + ingresoDescuentos) : 0;
 
+    const comision = p.comision || 0;
+    const totalComision = vendido * comision;
+    const totalProducto = vendido + cor;
+    const costoProducto = totalProducto * (p.costo || 0);
+
     return {
       ...p,
       ini,
@@ -129,7 +134,11 @@ export const calcularResumen = (
       vendido,
       ingresoEsperado,
       costoCortesias: cor * p.costo,
-      proveedor
+      proveedor,
+      comision,
+      totalComision,
+      totalProducto,
+      costoProducto
     };
   });
 };
@@ -565,7 +574,11 @@ export const exportarExcelPicante = async (
     wsBar.addRow([`REPORTE DE BARRA: ${bEv.nombre}`]).font = { size: 14, bold: true };
     wsBar.addRow([]);
 
-    const barHeaders = ['PRODUCTO', 'PRECIO', 'INICIAL', 'RECARGAS', 'CORTESÍAS', 'BAJAS', 'FINAL', 'VENTA TOTAL (UND)', 'VENTA TOTAL ($)'];
+    const barHeaders = [
+      'PRODUCTO', 'PRECIO', 'INICIAL', 'RECARGAS', 'CORTESÍAS', 'BAJAS', 'FINAL',
+      'VENTA TOTAL (UND)', 'VENTA TOTAL ($)', 'COMISIÓN UNIT', 'TOTAL COMISIÓN ($)',
+      'TOTAL PRODUCTO', 'COSTO PRODUCTO ($)'
+    ];
     const hBar = wsBar.addRow(barHeaders);
     headerStyle(wsBar, hBar.number, barHeaders.length);
 
@@ -588,9 +601,17 @@ export const exportarExcelPicante = async (
       const consumo = Math.max(0, disp - bFin);
       const vendidoUnd = Math.max(0, consumo - bCor - bPer);
       const ventaValor = vendidoUnd * p.precio;
+      const comisionUnit = p.comision || 0;
+      const totalComision = vendidoUnd * comisionUnit;
+      const totalProducto = vendidoUnd + bCor; // Regla de tu hermano: Venta Total UND + Cortesias
+      const costoProducto = totalProducto * (p.costo || 0);
 
       if (disp > 0 || bFin > 0) {
-        wsBar.addRow([p.nombre, p.precio, bIni, bRec, bCor, bPer, bFin, vendidoUnd, ventaValor]);
+        wsBar.addRow([
+          p.nombre, p.precio, bIni, bRec, bCor, bPer, bFin,
+          vendidoUnd, ventaValor, comisionUnit, totalComision,
+          totalProducto, costoProducto
+        ]);
       }
     });
 
