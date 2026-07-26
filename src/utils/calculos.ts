@@ -459,12 +459,19 @@ export const exportarExcelPicante = async (
       .filter((i: any) => i.evento_id === bodegaEventId && i.producto_id === p.id && i.tipo === 'inicial')
       .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
 
+    // Helper para identificar si un registro de perdida en bodega es realmente un traslado/despacho a barra
+    const esDespachoBodega = (motivo?: string) => {
+      if (!motivo) return false;
+      const m = motivo.toLowerCase();
+      return m.includes('traslado') || m.includes('despacho') || m.includes('clonaci') || m.includes('devoluci');
+    };
+
     // Despachos = salidas de bodega hacia barras
     const pDespachos = globalData.perdidas
       .filter((l: any) =>
         l.evento_id === bodegaEventId &&
         l.producto_id === p.id &&
-        (l.motivo?.startsWith('Traslado a ') || l.motivo?.startsWith('Clonación hacia '))
+        esDespachoBodega(l.motivo)
       ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
 
     // Retornos = lo que las barras devolvieron a bodega (entran como recargas con proveedor RETORNO)
@@ -480,10 +487,7 @@ export const exportarExcelPicante = async (
       .filter((l: any) =>
         l.evento_id === bodegaEventId &&
         l.producto_id === p.id &&
-        !l.motivo?.startsWith('Traslado a ') &&
-        !l.motivo?.startsWith('Traslado enviado') &&
-        !l.motivo?.startsWith('Clonación') &&
-        !l.motivo?.startsWith('Devolución')
+        !esDespachoBodega(l.motivo)
       ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
 
     const pFin = globalData.inventario

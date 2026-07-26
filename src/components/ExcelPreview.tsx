@@ -119,18 +119,19 @@ export default function ExcelPreview({
                             const ini = Number(inventarioInicial[p.id]?.cantidad || 0);
                             const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
                             const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                            // Helper para identificar si un motivo es despacho/traslado desde bodega
+                            const esDespacho = (motivo?: string) => {
+                              if (!motivo) return false;
+                              const m = motivo.toLowerCase();
+                              return m.includes('traslado') || m.includes('despacho') || m.includes('clonaci') || m.includes('devoluci');
+                            };
+
                             // Despachos de bodega a barras (NO son bajas)
                             const despachos = isBodega
-                              ? perdidas.filter(l => l.producto_id === p.id && (l.motivo?.startsWith('Traslado a ') || l.motivo?.startsWith('Clonación hacia '))).reduce((a, b) => a + Number(b.cantidad), 0)
+                              ? perdidas.filter(l => l.producto_id === p.id && esDespacho(l.motivo)).reduce((a, b) => a + Number(b.cantidad), 0)
                               : 0;
                             // Bajas reales: excluir traslados a barras/bodega y clonaciones
-                            const per = perdidas.filter(l =>
-                              l.producto_id === p.id &&
-                              !l.motivo?.startsWith('Traslado a ') &&
-                              !l.motivo?.startsWith('Traslado enviado') &&
-                              !l.motivo?.startsWith('Clonación') &&
-                              !l.motivo?.startsWith('Devolución')
-                            ).reduce((a, b) => a + Number(b.cantidad), 0);
+                            const per = perdidas.filter(l => l.producto_id === p.id && !esDespacho(l.motivo)).reduce((a, b) => a + Number(b.cantidad), 0);
                             const fin = finCount[p.id] !== undefined ? Number(finCount[p.id]) : Math.max(0, ini + rec - despachos - cor - per);
                             const consumo = Math.max(0, ini + rec - fin);
                             const vendidoUnd = Math.max(0, consumo - cor - per - despachos);
