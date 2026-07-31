@@ -140,8 +140,8 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
                     <tr>
                       <th className="px-6 py-4">Producto</th>
                       <th className="px-4 py-4 text-center">Categoría</th>
-                      <th className="px-4 py-4 text-center">Precio</th>
-                      <th className="px-4 py-4 text-center">Costo</th>
+                      <th className="px-4 py-4 text-center">Precio al Público</th>
+                      <th className="px-4 py-4 text-center">Costo Unitario</th>
                       <th className="px-4 py-4 text-center">Comisión Unit</th>
                       <th className="px-6 py-4 text-right">Acciones</th>
                     </tr>
@@ -299,10 +299,10 @@ export default function AdminPanel({ onAtras }: { onAtras: () => void }) {
                 </Field>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <Field label="Costo Base ($)">
+                <Field label="Precio Unitario / Costo ($)">
                   <input required type="number" className={inputCls} value={editProd.costo} onChange={e => setEditProd({...editProd, costo: Number(e.target.value)})} />
                 </Field>
-                <Field label="Precio Venta ($)">
+                <Field label="Precio al Público ($)">
                   <input required type="number" className={inputCls} value={editProd.precio} onChange={e => setEditProd({...editProd, precio: Number(e.target.value)})} />
                 </Field>
                 <Field label="Comisión ($)">

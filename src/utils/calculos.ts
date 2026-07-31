@@ -202,12 +202,7 @@ export const exportarExcel = async (
   ws.addRow([]);
 
   const tableHeader = [
-    'PRODUCTO', 'PRECIO', 'INICIAL', 'RECARGAS', 'FINAL', 'CONSUMO', 
-    'CORTESÍAS (UND)', 'VALOR CORT. ($)', 
-    'DESC. (UND)', 'VALOR DESC. ($)', 
-    'BAJAS (UND)', 'VALOR BAJAS ($)', 
-    'VENDIDO (UND)', 'INGRESO REAL ($)', 
-    '', 'COSTO UNIT', 'COSTO TOTAL', 'PROVEEDOR'
+    'Producto', 'Valor', 'Inicial', 'Recarga', 'Cortesia', 'Bajas', 'Final', 'Venta', 'Venta total'
   ];
   const headerRow = ws.addRow(tableHeader);
   headerStyle(ws, headerRow.number, tableHeader.length);
@@ -216,31 +211,22 @@ export const exportarExcel = async (
   const categorias = [...new Set(resumen.map(p => p.categoria))]
     .sort((a, b) => (ORDEN_PICANTE_CAT[a] ?? 99) - (ORDEN_PICANTE_CAT[b] ?? 99));
   categorias.forEach(cat => {
-    const catRow = ws.addRow([`>>> CATEGORÍA: ${cat.toUpperCase()}`]);
+    const catRow = ws.addRow([cat.toUpperCase()]);
     catRow.font = { bold: true };
-    catRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+    catRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
     
     const prods = resumen.filter(p => p.categoria === cat);
     prods.forEach(p => {
       ws.addRow([
         p.nombre, 
-        p.precio, 
-        p.ini, 
-        p.rec, 
+        p.precio, // Precio a la venta público
+        p.ini || '', 
+        p.rec || '', 
+        p.cor || '', 
+        p.per || '', 
         p.fin, 
-        p.consumo, 
-        p.cor, 
-        p.valorCortesiaTotales, 
-        p.desc || 0, 
-        p.valorDescontadoTotales, 
-        p.per, 
-        p.valorPerdidaTotales,
-        p.vendido + (p.desc || 0), // Total unidades que generaron algún ingreso
-        p.ingresoEsperado, 
-        '', 
-        p.costo, 
-        p.consumo * p.costo, 
-        p.proveedor || '-',
+        p.vendido, 
+        p.ingresoEsperado
       ]);
     });
   });
@@ -454,112 +440,212 @@ export const exportarExcelPicante = async (
   wsBodega.addRow([`Fecha: ${fecha}`]);
   wsBodega.addRow([]);
 
-  // Sección 1: Movimientos de la Bodega
-  wsBodega.addRow(['── MOVIMIENTOS DE BODEGA ──']).font = { bold: true, italic: true, color: { argb: 'FF94A3B8' } };
-  const bHeaders = [
-    'PRODUCTO', 'CATEGORÍA', 'PRECIO',
-    'INICIAL BODEGA', 'DESPACHOS A BARRAS', 'RETORNOS DE BARRAS', 'BAJAS EN BODEGA', 'STOCK FINAL BODEGA'
+  // ── TABLA PRINCIPAL: Consolidado por producto acumulado de todas las barras ──
+  const mainHeaders = [
+    'Producto', 'Presentacion', 'Valor', 'Inicial', 'Recargas', 'Cortesias', 'Bajas', 'Final',
+    'Venta total (UND)', 'Venta total ($)',
+    'COMISION', 'TOTAL COMISION',
+    'TOTAL PRODUCTO', 'COSTO PRODUCTO'
   ];
-  const bRow = wsBodega.addRow(bHeaders);
-  headerStyle(wsBodega, bRow.number, bHeaders.length);
+  const mainHeaderRow = wsBodega.addRow(mainHeaders);
+  headerStyle(wsBodega, mainHeaderRow.number, mainHeaders.length);
 
-  productos.forEach(p => {
-    const pIni = globalData.inventario
-      .filter((i: any) => i.evento_id === bodegaEventId && i.producto_id === p.id && i.tipo === 'inicial')
-      .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+  const ORDEN_CAT: Record<string, number> = { gaseosa: 1, agua: 2, cerveza: 3, otro: 4, licor: 5, snack: 6 };
+  const categorias = Array.from(new Set(productos.map((p: any) => p.categoria)))
+    .sort((a: any, b: any) => (ORDEN_CAT[a] ?? 99) - (ORDEN_CAT[b] ?? 99));
 
-    // Helper para identificar si un registro de perdida en bodega es realmente un traslado/despacho a barra
-    const esDespachoBodega = (motivo?: string) => {
-      if (!motivo) return false;
-      const m = motivo.toLowerCase();
-      return m.includes('traslado') || m.includes('despacho') || m.includes('clonaci') || m.includes('devoluci');
-    };
+  let grandTotalVenta = 0;
+  let grandTotalComision = 0;
+  let grandTotalCosto = 0;
 
-    // Despachos = salidas de bodega hacia barras
-    const pDespachos = globalData.perdidas
-      .filter((l: any) =>
-        l.evento_id === bodegaEventId &&
-        l.producto_id === p.id &&
-        esDespachoBodega(l.motivo)
-      ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+  categorias.forEach((cat: any) => {
+    // Fila de categoría separadora
+    const catFila = wsBodega.addRow([cat.toUpperCase()]);
+    catFila.font = { bold: true };
+    catFila.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
 
-    // Retornos = lo que las barras devolvieron a bodega (entran como recargas con proveedor RETORNO)
-    const pRetornos = globalData.recargas
-      .filter((r: any) =>
-        r.evento_id === bodegaEventId &&
-        r.producto_id === p.id &&
-        r.proveedor?.startsWith('RETORNO:')
-      ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+    const catProds = productos.filter((p: any) => p.categoria === cat);
+    catProds.forEach((p: any) => {
+      // Inicial de bodega
+      const inicialBodega = globalData.inventario
+        .filter((i: any) => i.evento_id === bodegaEventId && i.producto_id === p.id && i.tipo === 'inicial')
+        .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
 
-    // Bajas reales SOLO de la bodega (botella rota en bodega, etc.)
-    const pBajasBodega = globalData.perdidas
-      .filter((l: any) =>
-        l.evento_id === bodegaEventId &&
-        l.producto_id === p.id &&
-        !esDespachoBodega(l.motivo)
-      ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      // Recargas totales de todas las barras (que vienen de bodega)
+      const recargas_barras = barrasIds.reduce((sum: number, bId: string) => {
+        return sum + globalData.recargas
+          .filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:'))
+          .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      }, 0);
 
-    const pFin = globalData.inventario
-      .filter((i: any) => i.evento_id === bodegaEventId && i.producto_id === p.id && i.tipo === 'final')
-      .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      // Cortesías acumuladas de todas las barras
+      const cortesias_total = globalData.cortesias
+        .filter((c: any) => barrasIds.includes(c.evento_id) && c.producto_id === p.id)
+        .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
 
-    if (pIni > 0 || pDespachos > 0) {
-      wsBodega.addRow([p.nombre, p.categoria, p.precio, pIni, pDespachos, pRetornos, pBajasBodega, pFin]);
-    }
-  });
+      // Bajas reales de todas las barras
+      const bajas_total = globalData.perdidas
+        .filter((l: any) =>
+          barrasIds.includes(l.evento_id) &&
+          l.producto_id === p.id &&
+          !l.motivo?.startsWith('Traslado enviado') &&
+          !l.motivo?.startsWith('Traslado a ') &&
+          !l.motivo?.startsWith('Devolución Bodega') &&
+          !l.motivo?.startsWith('Clonación')
+        ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
 
-  // Sección 2: Consolidado de todas las barras
-  wsBodega.addRow([]);
-  wsBodega.addRow(['── CONSOLIDADO TOTAL DE BARRAS (Acumulado de todas las barras) ──']).font = { bold: true, italic: true, color: { argb: 'FF94A3B8' } };
-  const cHeaders = [
-    'PRODUCTO', 'CATEGORÍA', 'PRECIO',
-    'CORTESÍAS TOTALES', 'VALOR CORT. ($)',
-    'BAJAS TOTALES (UND)', 'DESCUENTOS (UND)',
-    'VENDIDO TOTAL (UND)', 'INGRESO TOTAL ($)'
-  ];
-  const cRow = wsBodega.addRow(cHeaders);
-  headerStyle(wsBodega, cRow.number, cHeaders.length);
+      // Stock final (suma de finales de todas las barras)
+      const final_total = barrasIds.reduce((sum: number, bId: string) => {
+        return sum + globalData.inventario
+          .filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final')
+          .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      }, 0);
 
-  productos.forEach(p => {
-    // Cortesías de todas las barras
-    const tCor = globalData.cortesias
-      .filter((c: any) => barrasIds.includes(c.evento_id) && c.producto_id === p.id)
-      .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      // Venta = todo lo que salió que no fue cortesía ni baja
+      let vendido = 0;
+      barrasIds.forEach((bId: string) => {
+        const bIni = globalData.inventario.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bRec = globalData.recargas.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bFin = globalData.inventario.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bBajas = globalData.perdidas.filter((l: any) => l.evento_id === bId && l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bCor = globalData.cortesias.filter((c: any) => c.evento_id === bId && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const consumo = Math.max(0, bIni + bRec - bFin);
+        vendido += Math.max(0, consumo - bCor - bBajas);
+      });
 
-    // Bajas reales de todas las barras (excluye traslados)
-    const tBajas = globalData.perdidas
-      .filter((l: any) =>
-        barrasIds.includes(l.evento_id) &&
-        l.producto_id === p.id &&
-        !l.motivo?.startsWith('Traslado enviado') &&
-        !l.motivo?.startsWith('Traslado a ') &&
-        !l.motivo?.startsWith('Devolución Bodega') &&
-        !l.motivo?.startsWith('Clonación')
-      ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      const ventaTotal = vendido * p.precio;
+      const comisionUnit = p.comision || 0;
+      const totalComision = vendido * comisionUnit;
+      const totalProducto = vendido + cortesias_total; // Vendido + Cortesías
+      const costoProducto = totalProducto * (p.costo || 0);
 
-    // Descuentos de todas las barras
-    const tDesc = globalData.descuentos
-      .filter((d: any) => barrasIds.includes(d.evento_id) && d.producto_id === p.id)
-      .reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+      grandTotalVenta += ventaTotal;
+      grandTotalComision += totalComision;
+      grandTotalCosto += costoProducto;
 
-    // Vendido total (todo lo consumido en barras que no fue cortesía ni baja)
-    let tVendido = 0;
-    barrasIds.forEach(bId => {
-      const bIni = globalData.inventario.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bRec = globalData.recargas.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bFin = globalData.inventario.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bBajas = globalData.perdidas.filter((l: any) => l.evento_id === bId && l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bCor = globalData.cortesias.filter((c: any) => c.evento_id === bId && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const consumo = Math.max(0, bIni + bRec - bFin);
-      tVendido += Math.max(0, consumo - bCor - bBajas);
+      const row = wsBodega.addRow([
+        p.nombre,
+        p.presentacion || '',
+        p.precio,
+        inicialBodega || '',
+        recargas_barras || '',
+        cortesias_total || '',
+        bajas_total || '',
+        final_total,
+        vendido,
+        ventaTotal,
+        comisionUnit || '',
+        totalComision || '',
+        totalProducto,
+        costoProducto || ''
+      ]);
+
+      // Formato número para columnas monetarias
+      row.getCell(3).numFmt = '$#,##0';
+      row.getCell(10).numFmt = '$#,##0';
+      row.getCell(11).numFmt = '$#,##0';
+      row.getCell(12).numFmt = '$#,##0';
+      row.getCell(14).numFmt = '$#,##0';
     });
+  });
 
-    const tIngreso = tVendido * p.precio;
+  // Fila de TOTAL
+  wsBodega.addRow([]);
+  const totalRow = wsBodega.addRow(['', '', '', '', '', '', '', '', '', 'TOTAL', '', '', '', `$${grandTotalVenta.toLocaleString('es-CO')}`]);
+  totalRow.font = { bold: true };
+  totalRow.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+  totalRow.getCell(14).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
 
-    if (tCor > 0 || tBajas > 0 || tVendido > 0) {
-      wsBodega.addRow([p.nombre, p.categoria, p.precio, tCor, tCor * p.precio, tBajas, tDesc, tVendido, tIngreso]);
+  // ── SECCIÓN INFERIOR: Resumen financiero ──
+  wsBodega.addRow([]);
+  wsBodega.addRow([]);
+
+  // Calcular totales necesarios para la sección financiera
+  const efectivo_total = globalData.dinero?.efectivo || 0;
+  const datafono_total = globalData.dinero?.datafono || 0;
+  const gastos_total = (globalData.gastos || []).reduce((a: number, b: any) => a + Number(b.monto), 0);
+  const propinas_total = globalData.propinas || 0;
+  const utilidad = grandTotalVenta - grandTotalCosto - grandTotalComision - gastos_total;
+
+  // Columna izquierda: FALTANTE POR PAGAR
+  // (deudas a proveedores = por calcular)
+  const deudas: Record<string, number> = {};
+  productos.forEach((p: any) => {
+    if (p.proveedor && p.proveedor !== '-') {
+      const consumoTotal = barrasIds.reduce((sum: number, bId: string) => {
+        const bIni = globalData.inventario.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bRec = globalData.recargas.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bFin = globalData.inventario.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        return sum + Math.max(0, bIni + bRec - bFin);
+      }, 0);
+      deudas[p.proveedor] = (deudas[p.proveedor] || 0) + (consumoTotal * (p.costo || 0));
     }
   });
+
+  const totalDeuda = Object.values(deudas).reduce((a: number, b: number) => a + b, 0);
+
+  const startRow = wsBodega.lastRow!.number + 1;
+
+  // Izquierda: desglose deudas proveedores y resumen pago
+  wsBodega.getRow(startRow).getCell(1).value = 'FALTANTE POR PAGAR';
+  wsBodega.getRow(startRow).getCell(1).font = { bold: true, color: { argb: 'FF000000' } };
+  wsBodega.getRow(startRow).getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
+
+  let r = startRow + 1;
+  Object.entries(deudas).forEach(([prov, monto]) => {
+    wsBodega.getRow(r).getCell(1).value = prov;
+    wsBodega.getRow(r).getCell(2).value = monto;
+    wsBodega.getRow(r).getCell(2).numFmt = '$#,##0';
+    r++;
+  });
+
+  wsBodega.getRow(r).getCell(1).value = 'COMISIONES';
+  wsBodega.getRow(r).getCell(2).value = grandTotalComision;
+  wsBodega.getRow(r).getCell(2).numFmt = '$#,##0';
+  r++;
+
+  wsBodega.getRow(r).getCell(1).value = 'PROPINAS';
+  wsBodega.getRow(r).getCell(2).value = propinas_total;
+  wsBodega.getRow(r).getCell(2).numFmt = '$#,##0';
+  r++;
+
+  const totalPagoRow = wsBodega.getRow(r);
+  totalPagoRow.getCell(1).value = 'TOTAL';
+  totalPagoRow.getCell(2).value = totalDeuda + grandTotalComision + propinas_total;
+  totalPagoRow.getCell(2).numFmt = '$#,##0';
+  totalPagoRow.font = { bold: true };
+  totalPagoRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
+  totalPagoRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
+
+  // Derecha: Efectivo, Datáfono, Gastos, Total, UTILIDAD
+  const col = 9; // columna I en adelante
+  let rr = startRow + 1;
+
+  const finItems = [
+    { label: 'efectivo', val: efectivo_total },
+    { label: 'datafono', val: datafono_total },
+    { label: 'gastos', val: -gastos_total },
+    { label: 'TOTAL', val: efectivo_total + datafono_total - gastos_total },
+  ];
+  finItems.forEach(item => {
+    wsBodega.getRow(rr).getCell(col).value = item.label;
+    wsBodega.getRow(rr).getCell(col + 1).value = item.val;
+    wsBodega.getRow(rr).getCell(col + 1).numFmt = '$#,##0';
+    if (item.label === 'TOTAL') {
+      wsBodega.getRow(rr).getCell(col).font = { bold: true };
+      wsBodega.getRow(rr).getCell(col + 1).font = { bold: true };
+    }
+    rr++;
+  });
+
+  // Fila de UTILIDAD (destacada en verde)
+  const utilRow = wsBodega.getRow(rr);
+  utilRow.getCell(col).value = 'UTILIDAD';
+  utilRow.getCell(col + 1).value = utilidad;
+  utilRow.getCell(col + 1).numFmt = '$#,##0';
+  utilRow.font = { bold: true, size: 12 };
+  utilRow.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+  utilRow.getCell(col + 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
 
 
   // 2. PESTAÑAS POR BARRAS (BARRA X y CORTESIAS X)
@@ -575,44 +661,52 @@ export const exportarExcelPicante = async (
     wsBar.addRow([]);
 
     const barHeaders = [
-      'PRODUCTO', 'PRECIO', 'INICIAL', 'RECARGAS', 'CORTESÍAS', 'BAJAS', 'FINAL',
-      'VENTA TOTAL (UND)', 'VENTA TOTAL ($)', 'COMISIÓN UNIT', 'TOTAL COMISIÓN ($)',
-      'TOTAL PRODUCTO', 'COSTO PRODUCTO ($)'
+      'Producto', 'Valor', 'Inicial', 'Recarga', 'Cortesia', 'Bajas', 'Final', 'Venta', 'Venta total'
     ];
     const hBar = wsBar.addRow(barHeaders);
     headerStyle(wsBar, hBar.number, barHeaders.length);
 
-    productos.forEach(p => {
-      const bIni = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bRec = globalData.recargas.filter((r: any) => r.evento_id === bEv.id && r.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bCor = globalData.cortesias.filter((c: any) => c.evento_id === bEv.id && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      // BAJAS REALES de la barra: solo rotas/dañadas, NO traslados enviados a otras barras/bodega
-      const bPer = globalData.perdidas.filter((l: any) =>
-        l.evento_id === bEv.id &&
-        l.producto_id === p.id &&
-        !l.motivo?.startsWith('Traslado enviado') &&
-        !l.motivo?.startsWith('Traslado a ') &&
-        !l.motivo?.startsWith('Devolución Bodega') &&
-        !l.motivo?.startsWith('Clonación')
-      ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      const bFin = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-      
-      const disp = bIni + bRec;
-      const consumo = Math.max(0, disp - bFin);
-      const vendidoUnd = Math.max(0, consumo - bCor - bPer);
-      const ventaValor = vendidoUnd * p.precio;
-      const comisionUnit = p.comision || 0;
-      const totalComision = vendidoUnd * comisionUnit;
-      const totalProducto = vendidoUnd + bCor; // Regla de tu hermano: Venta Total UND + Cortesias
-      const costoProducto = totalProducto * (p.costo || 0);
+    const ORDEN_PICANTE_CAT: Record<string, number> = { gaseosa: 1, agua: 2, cerveza: 3, otro: 4, licor: 5, snack: 6 };
+    const categorias = Array.from(new Set(productos.map(p => p.categoria)))
+      .sort((a, b) => (ORDEN_PICANTE_CAT[a] ?? 99) - (ORDEN_PICANTE_CAT[b] ?? 99));
 
-      if (disp > 0 || bFin > 0) {
+    categorias.forEach(cat => {
+      const catProds = productos.filter(p => p.categoria === cat);
+      const catRow = wsBar.addRow([cat.toUpperCase()]);
+      catRow.font = { bold: true };
+      catRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+
+      catProds.forEach(p => {
+        const bIni = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bRec = globalData.recargas.filter((r: any) => r.evento_id === bEv.id && r.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bCor = globalData.cortesias.filter((c: any) => c.evento_id === bEv.id && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bPer = globalData.perdidas.filter((l: any) =>
+          l.evento_id === bEv.id &&
+          l.producto_id === p.id &&
+          !l.motivo?.startsWith('Traslado enviado') &&
+          !l.motivo?.startsWith('Traslado a ') &&
+          !l.motivo?.startsWith('Devolución Bodega') &&
+          !l.motivo?.startsWith('Clonación')
+        ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        const bFin = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+        
+        const disp = bIni + bRec;
+        const consumo = Math.max(0, disp - bFin);
+        const vendidoUnd = Math.max(0, consumo - bCor - bPer);
+        const ventaValor = vendidoUnd * p.precio;
+
         wsBar.addRow([
-          p.nombre, p.precio, bIni, bRec, bCor, bPer, bFin,
-          vendidoUnd, ventaValor, comisionUnit, totalComision,
-          totalProducto, costoProducto
+          p.nombre, 
+          p.precio, 
+          bIni || '', 
+          bRec || '', 
+          bCor || '', 
+          bPer || '', 
+          bFin, 
+          vendidoUnd, 
+          ventaValor
         ]);
-      }
+      });
     });
 
     // Pestaña Cortesías de esta barra

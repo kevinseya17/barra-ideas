@@ -498,50 +498,55 @@ export default function Reporte({ evento, resumen, recargas, cortesias, perdidas
         </Card>
 
         {/* RECARGAS */}
-        <Card className="p-6 border-slate-100 bg-slate-50/50">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <RefreshCw size={18} className="text-slate-500" /> Recargas
-            </h3>
-            <div className="flex gap-1">
-              <button 
-                onClick={() => exportarPDF('Reporte de Recargas e Ingresos', ['HORA', 'PRODUCTO', 'CANT', 'PROVEEDOR'], recargas.map(r => [r.hora, pName(r.producto_id), r.cantidad, r.proveedor]), 'Recargas')}
-                className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 transition-colors" title="PDF"
-              >
-                <FileText size={14} />
-              </button>
-              <button 
-                onClick={() => exportarExcelSimple('Reporte de Recargas e Ingresos', ['HORA', 'PRODUCTO', 'CANT', 'PROVEEDOR'], recargas.map(r => [r.hora, pName(r.producto_id), r.cantidad, r.proveedor]), 'Recargas')}
-                className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-700 transition-colors" title="Excel"
-              >
-                <Download size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {recargas.map((r, i) => {
-              const prod = productos.find(x => x.id === r.producto_id);
-              const inversion = (prod?.costo || 0) * r.cantidad;
-              return (
-                <div key={i} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm transition-all hover:shadow-md">
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{r.hora || '--:--'}</p>
-                    <p className="text-xs font-bold text-slate-900">+{r.cantidad}</p>
-                  </div>
-                  <p className="font-bold text-slate-900 text-sm">{pName(r.producto_id)}</p>
-                  <div className="mt-3 flex justify-between items-end">
-                    <div>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Proveedor</p>
-                      <p className="text-xs text-slate-700 font-bold">{r.proveedor}</p>
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400">Inv: {fmt(inversion)}</p>
-                  </div>
+        {(() => {
+          const recargasFiltradas = recargas.filter(r => !r.proveedor?.startsWith('RETORNO:') && !r.proveedor?.startsWith('Devolución'));
+          return (
+            <Card className="p-6 border-slate-100 bg-slate-50/50">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <RefreshCw size={18} className="text-slate-500" /> Recargas
+                </h3>
+                <div className="flex gap-1">
+                  <button 
+                    onClick={() => exportarPDF('Reporte de Recargas e Ingresos', ['HORA', 'PRODUCTO', 'CANT', 'PROVEEDOR'], recargasFiltradas.map(r => [r.hora, pName(r.producto_id), r.cantidad, r.proveedor]), 'Recargas')}
+                    className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 transition-colors" title="PDF"
+                  >
+                    <FileText size={14} />
+                  </button>
+                  <button 
+                    onClick={() => exportarExcelSimple('Reporte de Recargas e Ingresos', ['HORA', 'PRODUCTO', 'CANT', 'PROVEEDOR'], recargasFiltradas.map(r => [r.hora, pName(r.producto_id), r.cantidad, r.proveedor]), 'Recargas')}
+                    className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-700 transition-colors" title="Excel"
+                  >
+                    <Download size={14} />
+                  </button>
                 </div>
-              );
-            })}
-            {recargas.length === 0 && <p className="text-xs text-slate-400 italic text-center py-4">Sin recargas de inventario.</p>}
-          </div>
-        </Card>
+              </div>
+              <div className="space-y-4">
+                {recargasFiltradas.map((r, i) => {
+                  const prod = productos.find(x => x.id === r.producto_id);
+                  const inversion = (prod?.costo || 0) * r.cantidad;
+                  return (
+                    <div key={i} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm transition-all hover:shadow-md">
+                      <div className="flex justify-between items-start mb-2">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{r.hora || '--:--'}</p>
+                        <p className="text-xs font-bold text-slate-900">+{r.cantidad}</p>
+                      </div>
+                      <p className="font-bold text-slate-900 text-sm">{pName(r.producto_id)}</p>
+                      <div className="mt-3 flex justify-between items-end">
+                        <div>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Proveedor</p>
+                          <p className="text-xs text-slate-700 font-bold">{r.proveedor}</p>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400">Inv: {fmt(inversion)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {recargasFiltradas.length === 0 && <p className="text-xs text-slate-400 italic text-center py-4">Sin recargas de inventario.</p>}
+              </div>
+            </Card>
+          );
+        })()}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">

@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, PackageOpen, Settings, LayoutGrid, List, ChevronDown, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, PackageOpen, Settings, LayoutGrid, List, ChevronDown, RefreshCw, ShieldCheck, Edit2 } from 'lucide-react';
 import { Producto, Evento } from '@/types';
 import * as api from '@/lib/api';
 import { Btn, Card, Field, inputCls, Badge, catColor, SectionHeader } from './UI';
@@ -46,6 +46,27 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
   const [pinEliminar, setPinEliminar] = useState('');
   const [pinEliminarError, setPinEliminarError] = useState(false);
   const PIN_ADMIN = '1234';
+  const [editProdModal, setEditProdModal] = useState<Producto | null>(null);
+
+  const handleUpdateProductoPrecio = async (id: string, nuevoCosto: number, nuevoPrecio: number) => {
+    setProductos(prev => prev.map(p => p.id === id ? { ...p, costo: nuevoCosto, precio: nuevoPrecio } : p));
+    await api.updateProducto(id, { costo: nuevoCosto, precio: nuevoPrecio });
+  };
+
+  const handleSaveEditProd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProdModal) return;
+    await api.updateProducto(editProdModal.id, {
+      nombre: editProdModal.nombre,
+      categoria: editProdModal.categoria,
+      unidad: editProdModal.unidad,
+      costo: Number(editProdModal.costo),
+      precio: Number(editProdModal.precio),
+      comision: Number(editProdModal.comision || 0),
+    });
+    setProductos(prev => prev.map(p => p.id === editProdModal.id ? editProdModal : p));
+    setEditProdModal(null);
+  };
   const [formInv, setFormInv] = useState<Record<string, { cantidad: string, proveedor: string }>>(() => {
     if (invInicial) {
       return Object.fromEntries(Object.entries(invInicial).map(([k, v]) => [k, { cantidad: String(v.cantidad), proveedor: v.proveedor }]));
@@ -514,23 +535,44 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
                             <h4 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight truncate group-hover:text-[#00d2ff] transition-colors">{p.nombre}</h4>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{p.unidad}</p>
                           </div>
-                          <button 
-                            onClick={() => solicitarEliminarProducto(p.id, p.nombre)}
-                            className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
-                            title="Eliminar producto (requiere PIN)"
-                          >
-                            <ShieldCheck size={16} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => setEditProdModal(p)}
+                              className="p-2 text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-xl transition-all"
+                              title="Editar detalles del producto"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button 
+                              onClick={() => solicitarEliminarProducto(p.id, p.nombre)}
+                              className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
+                              title="Eliminar producto (requiere PIN)"
+                            >
+                              <ShieldCheck size={16} />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 mb-6">
                           <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-2xl border border-slate-100 dark:border-white/5">
-                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Costo Unit</p>
-                            <p className="text-xs font-black text-slate-600 dark:text-slate-300 text-center">${p.costo.toLocaleString()}</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Costo Unit ($)</p>
+                            <input 
+                              type="number"
+                              className="w-full text-xs font-black text-slate-700 dark:text-slate-200 text-center bg-transparent outline-none border-b border-transparent focus:border-indigo-400 transition-all"
+                              value={p.costo || ''}
+                              onChange={e => handleUpdateProductoPrecio(p.id, Number(e.target.value), p.precio)}
+                              placeholder="0"
+                            />
                           </div>
                           <div className="bg-cyan-50 dark:bg-[#00d2ff]/10 p-3 rounded-2xl border border-cyan-100 dark:border-[#00d2ff]/20">
-                            <p className="text-[8px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-widest mb-1 text-center">P. Venta</p>
-                            <p className="text-xs font-black text-cyan-700 dark:text-cyan-400 text-center">${p.precio.toLocaleString()}</p>
+                            <p className="text-[8px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-widest mb-1 text-center">P. Venta ($)</p>
+                            <input 
+                              type="number"
+                              className="w-full text-xs font-black text-cyan-700 dark:text-cyan-400 text-center bg-transparent outline-none border-b border-transparent focus:border-cyan-500 transition-all"
+                              value={p.precio || ''}
+                              onChange={e => handleUpdateProductoPrecio(p.id, p.costo, Number(e.target.value))}
+                              placeholder="0"
+                            />
                           </div>
                         </div>
 
@@ -593,9 +635,27 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
                         </div>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-bold text-slate-400">${p.costo.toLocaleString('es-CO')}</span>
-                          <span className="text-sm font-black text-cyan-600 dark:text-cyan-400">${p.precio.toLocaleString('es-CO')}</span>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-400">Costo: $</span>
+                            <input 
+                              type="number" 
+                              className="w-20 h-7 text-xs font-bold text-slate-600 dark:text-slate-300 text-center bg-slate-100 dark:bg-white/5 rounded-lg outline-none focus:border-indigo-400 border border-transparent"
+                              value={p.costo || ''} 
+                              onChange={e => handleUpdateProductoPrecio(p.id, Number(e.target.value), p.precio)}
+                              placeholder="0" 
+                            />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-cyan-600 dark:text-cyan-400">Venta: $</span>
+                            <input 
+                              type="number" 
+                              className="w-20 h-7 text-xs font-black text-cyan-600 dark:text-cyan-400 text-center bg-cyan-50 dark:bg-[#00d2ff]/10 rounded-lg outline-none focus:border-cyan-500 border border-cyan-200 dark:border-[#00d2ff]/30"
+                              value={p.precio || ''} 
+                              onChange={e => handleUpdateProductoPrecio(p.id, p.costo, Number(e.target.value))}
+                              placeholder="0" 
+                            />
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -618,6 +678,9 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
                         </select>
                       </td>
                       <td className="px-6 py-4 text-right">
+                        <button onClick={() => setEditProdModal(p)} className="p-2 text-slate-300 hover:text-indigo-500 transition-colors mr-1" title="Editar detalles del producto">
+                          <Edit2 size={16} />
+                        </button>
                         <button onClick={() => solicitarEliminarProducto(p.id, p.nombre)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors" title="Eliminar (PIN)">
                           <ShieldCheck size={16} />
                         </button>
@@ -727,6 +790,56 @@ export default function Apertura({ onContinuar, eventoInicial, productosIniciale
         </div>
       </div>
     )}
-  </>)
-  ;
+
+    {/* Modal de Edición de Producto */}
+    {editProdModal && (
+      <div className="fixed inset-0 z-[300] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg p-8 animate-in zoom-in-95 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+            <Edit2 size={20} className="text-cyan-500"/> Editar Producto: {editProdModal.nombre}
+          </h3>
+          <form onSubmit={handleSaveEditProd} className="space-y-4">
+            <Field label="Nombre del Producto">
+              <input required className={inputCls} value={editProdModal.nombre} onChange={e => setEditProdModal({...editProdModal, nombre: e.target.value})} />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Categoría">
+                <select required className={inputCls} value={editProdModal.categoria} onChange={e => setEditProdModal({...editProdModal, categoria: e.target.value as any})}>
+                  <option value="licor">Licor</option>
+                  <option value="cerveza">Cerveza</option>
+                  <option value="agua">Agua</option>
+                  <option value="gaseosa">Gaseosa</option>
+                  <option value="snack">Snack</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </Field>
+              <Field label="Presentación / Unidad">
+                <select required className={inputCls} value={editProdModal.unidad} onChange={e => setEditProdModal({...editProdModal, unidad: e.target.value as any})}>
+                  <option value="botella">Botella</option>
+                  <option value="unidad">Unidad</option>
+                  <option value="caja">Caja</option>
+                  <option value="lata">Lata</option>
+                </select>
+              </Field>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Precio Unitario / Costo ($)">
+                <input required type="number" className={inputCls} value={editProdModal.costo} onChange={e => setEditProdModal({...editProdModal, costo: Number(e.target.value)})} />
+              </Field>
+              <Field label="Precio al Público ($)">
+                <input required type="number" className={inputCls} value={editProdModal.precio} onChange={e => setEditProdModal({...editProdModal, precio: Number(e.target.value)})} />
+              </Field>
+              <Field label="Comisión ($)">
+                <input type="number" className={inputCls} value={editProdModal.comision || 0} onChange={e => setEditProdModal({...editProdModal, comision: Number(e.target.value)})} />
+              </Field>
+            </div>
+            <div className="pt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditProdModal(null)} className="px-5 py-2.5 font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl">Cancelar</button>
+              <Btn variant="brand">Guardar Cambios</Btn>
+            </div>
+          </form>
+        </Card>
+      </div>
+    )}
+  </>);
 }

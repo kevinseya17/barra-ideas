@@ -774,7 +774,7 @@ export default function Operacion({
                             desp = 0;
                           } else {
                             ini = inventarioInicial[p.id]?.cantidad ?? 0;
-                            rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
+                            rec = recargas.filter(r => r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:') && !r.proveedor?.startsWith('Devolución')).reduce((a, b) => a + b.cantidad, 0);
                             cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + b.cantidad, 0);
                             desp = perdidas.filter(l => l.producto_id === p.id && (l.motivo.startsWith('Traslado a ') || l.motivo.startsWith('Devolución'))).reduce((a, b) => a + b.cantidad, 0);
                             per = perdidas.filter(l => l.producto_id === p.id && !l.motivo.startsWith('Traslado a ') && !l.motivo.startsWith('Devolución')).reduce((a, b) => a + b.cantidad, 0);
@@ -1066,24 +1066,28 @@ export default function Operacion({
                   </div>
                 )}
 
-                {recargas.length > 0 && (
-                  <div className="mt-10 space-y-3 pt-8 border-t border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Historial Reciente</p>
-                    {recargas.map(r => (
-                      <div key={r.id} className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-white">
-                        <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
-                          <Clock size={14} />
+                {(() => {
+                  const realRecargas = recargas.filter(r => !r.proveedor?.startsWith('RETORNO:') && !r.proveedor?.startsWith('Devolución'));
+                  if (realRecargas.length === 0) return null;
+                  return (
+                    <div className="mt-10 space-y-3 pt-8 border-t border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Historial Reciente</p>
+                      {realRecargas.map(r => (
+                        <div key={r.id} className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-white">
+                          <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                            <Clock size={14} />
+                          </div>
+                          <span className="text-xs font-bold text-slate-400 w-12">{r.hora}</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-slate-800">{pName(r.producto_id)}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">{r.proveedor || 'Sin proveedor'}</p>
+                          </div>
+                          <Badge color="brand">+{r.cantidad}</Badge>
                         </div>
-                        <span className="text-xs font-bold text-slate-400 w-12">{r.hora}</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-slate-800">{pName(r.producto_id)}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">{r.proveedor || 'Sin proveedor'}</p>
-                        </div>
-                        <Badge color="brand">+{r.cantidad}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </Card>
             )}
 

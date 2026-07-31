@@ -83,96 +83,204 @@ export default function ExcelPreview({
           {activeSheet === 'bodega' && (
             <div className="space-y-6">
               <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-xs font-bold flex items-center justify-between">
-                <span>Hoja: {isBodega ? 'BODEGA PRINCIPAL (Consolidado General)' : `BARRA - ${evento.nombre}`}</span>
+                <span>Hoja: {isBodega ? 'BODEGA PRINCIPAL (Consolidado General de Evento)' : `BARRA - ${evento.nombre}`}</span>
                 <span className="text-[10px] uppercase tracking-widest text-slate-400">Pestaña Activa</span>
               </div>
 
-              {/* GRID SIMULADOR DE EXCEL */}
-              <div className="overflow-x-auto rounded-2xl border border-slate-800 shadow-xl bg-slate-900">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-800 text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-slate-700">
-                      <th className="p-3 border-r border-slate-700/60 text-center w-12 text-slate-500">#</th>
-                      <th className="p-3 border-r border-slate-700/60">PRODUCTO</th>
-                      <th className="p-3 border-r border-slate-700/60 text-right">PRECIO</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-slate-800/80">INICIAL</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-indigo-950/40 text-indigo-300">RECARGAS</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-amber-950/40 text-amber-300">CORTESÍAS</th>
-                      {isBodega && <th className="p-3 border-r border-slate-700/60 text-center bg-cyan-950/60 text-cyan-300">DESPACHOS→BARRAS</th>}
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-rose-950/40 text-rose-300">BAJAS</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-cyan-950/40 text-cyan-300">FINAL</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-emerald-950/60 text-emerald-300">VENDIDO (UND)</th>
-                      <th className="p-3 border-r border-slate-700/60 text-right bg-emerald-950/80 text-emerald-400">VENTA TOTAL ($)</th>
-                      <th className="p-3 border-r border-slate-700/60 text-right text-amber-300">COMISIÓN UNIT</th>
-                      <th className="p-3 border-r border-slate-700/60 text-right text-amber-400">TOTAL COMISIÓN</th>
-                      <th className="p-3 border-r border-slate-700/60 text-center bg-indigo-950/60 text-indigo-300">TOTAL PRODUCTO</th>
-                      <th className="p-3 text-right bg-violet-950/80 text-violet-300">COSTO PRODUCTO ($)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/80 text-slate-200">
-                    {categorias.map(cat => {
-                      const prods = productos.filter(p => p.categoria === cat);
-                      return (
-                        <React.Fragment key={cat}>
-                          <tr className="bg-slate-800/40 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                            <td colSpan={isBodega ? 15 : 14} className="px-4 py-2 bg-slate-850/60 border-y border-slate-800 text-emerald-400">
-                              ▶ CATEGORÍA: {cat}
-                            </td>
+              {isBodega ? (() => {
+                const barrasIds: string[] = globalData?.relatedEvents
+                  ?.filter((e: any) => !e.nombre.startsWith('BODEGA -'))
+                  .map((e: any) => e.id) || [];
+
+                let grandTotalVenta = 0;
+                let grandTotalComision = 0;
+                let grandTotalCosto = 0;
+
+                const bodegaRows = categorias.map(cat => {
+                  const catProds = productos.filter(p => p.categoria === cat);
+                  const rows = catProds.map(p => {
+                    const inicialBodega = Number(inventarioInicial[p.id]?.cantidad || 0);
+                    const recargas_barras = barrasIds.reduce((sum: number, bId: string) =>
+                      sum + (globalData?.recargas?.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0), 0);
+                    const cortesias_total = globalData?.cortesias?.filter((c: any) => barrasIds.includes(c.evento_id) && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                    const bajas_total = globalData?.perdidas?.filter((l: any) => barrasIds.includes(l.evento_id) && l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                    const final_total = barrasIds.reduce((sum: number, bId: string) =>
+                      sum + (globalData?.inventario?.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0), 0);
+                    let vendido = 0;
+                    barrasIds.forEach((bId: string) => {
+                      const bIni = globalData?.inventario?.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                      const bRec = globalData?.recargas?.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                      const bFin = globalData?.inventario?.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                      const bBajas = globalData?.perdidas?.filter((l: any) => l.evento_id === bId && l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                      const bCor = globalData?.cortesias?.filter((c: any) => c.evento_id === bId && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+                      vendido += Math.max(0, bIni + bRec - bFin - bCor - bBajas);
+                    });
+                    const ventaTotal = vendido * p.precio;
+                    const comisionUnit = p.comision || 0;
+                    const totalComision = vendido * comisionUnit;
+                    const totalProducto = vendido + cortesias_total;
+                    const costoProducto = totalProducto * (p.costo || 0);
+                    grandTotalVenta += ventaTotal;
+                    grandTotalComision += totalComision;
+                    grandTotalCosto += costoProducto;
+                    return { p, inicialBodega, recargas_barras, cortesias_total, bajas_total, final_total, vendido, ventaTotal, comisionUnit, totalComision, totalProducto, costoProducto };
+                  });
+                  return { cat, rows };
+                });
+
+                const efectivo_total = globalData?.dinero?.efectivo || 0;
+                const datafono_total = globalData?.dinero?.datafono || 0;
+                const gastos_total = (globalData?.gastos || []).reduce((a: number, b: any) => a + Number(b.monto), 0);
+                const propinas_total = globalData?.propinas || 0;
+                const utilidad = grandTotalVenta - grandTotalCosto - grandTotalComision - gastos_total;
+
+                return (
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto rounded-2xl border border-slate-800 shadow-xl bg-slate-900">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-800 text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-slate-700">
+                            <th className="p-3 border-r border-slate-700/60">Producto</th>
+                            <th className="p-3 border-r border-slate-700/60">Presentacion</th>
+                            <th className="p-3 border-r border-slate-700/60 text-right">Valor</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center">Inicial</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center text-indigo-300">Recargas</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center text-amber-300">Cortesias</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center text-rose-300">Bajas</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center text-cyan-300">Final</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center text-emerald-300">Venta total (UND)</th>
+                            <th className="p-3 border-r border-slate-700/60 text-right text-emerald-400 font-black">Venta total ($)</th>
+                            <th className="p-3 border-r border-slate-700/60 text-right text-amber-300">COMISION</th>
+                            <th className="p-3 border-r border-slate-700/60 text-right text-amber-400">TOTAL COMISION</th>
+                            <th className="p-3 border-r border-slate-700/60 text-center text-indigo-300">TOTAL PRODUCTO</th>
+                            <th className="p-3 text-right text-violet-300">COSTO PRODUCTO</th>
                           </tr>
-                          {prods.map((p, idx) => {
-                            const ini = Number(inventarioInicial[p.id]?.cantidad || 0);
-                            const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
-                            const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
-                            // Helper para identificar si un motivo es despacho/traslado desde bodega
-                            const esDespacho = (motivo?: string) => {
-                              if (!motivo) return false;
-                              const m = motivo.toLowerCase();
-                              return m.includes('traslado') || m.includes('despacho') || m.includes('clonaci') || m.includes('devoluci');
-                            };
-
-                            // Despachos de bodega a barras (NO son bajas)
-                            const despachos = isBodega
-                              ? perdidas.filter(l => l.producto_id === p.id && esDespacho(l.motivo)).reduce((a, b) => a + Number(b.cantidad), 0)
-                              : 0;
-                            // Bajas reales: excluir traslados a barras/bodega y clonaciones
-                            const per = perdidas.filter(l => l.producto_id === p.id && !esDespacho(l.motivo)).reduce((a, b) => a + Number(b.cantidad), 0);
-                            const fin = finCount[p.id] !== undefined ? Number(finCount[p.id]) : Math.max(0, ini + rec - despachos - cor - per);
-                            const consumo = Math.max(0, ini + rec - fin);
-                            const vendidoUnd = Math.max(0, consumo - cor - per - despachos);
-                            const ventaTotal = vendidoUnd * p.precio;
-                            const comisionUnit = p.comision || 0;
-                            const totalComision = vendidoUnd * comisionUnit;
-                            const totalProducto = vendidoUnd + cor;
-                            const costoProducto = totalProducto * (p.costo || 0);
-
-                            return (
-                              <tr key={p.id} className="hover:bg-slate-800/60 transition-colors">
-                                <td className="p-3 text-center border-r border-slate-800 text-[10px] font-bold text-slate-600">{idx + 1}</td>
-                                <td className="p-3 border-r border-slate-800 font-bold text-slate-100">{p.nombre}</td>
-                                <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{ini}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{rec > 0 ? `+${rec}` : '0'}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{cor > 0 ? cor : '0'}</td>
-                                {isBodega && <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-300">{despachos > 0 ? `-${despachos}` : '0'}</td>}
-                                <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{per > 0 ? per : '0'}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{fin}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400 bg-emerald-950/20">{vendidoUnd}</td>
-                                <td className="p-3 border-r border-slate-800 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>
-                                <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-300">{fmt(comisionUnit)}</td>
-                                <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-400">{fmt(totalComision)}</td>
-                                <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-300 bg-indigo-950/20">{totalProducto}</td>
-                                <td className="p-3 text-right font-mono text-violet-300 bg-violet-950/30">{fmt(costoProducto)}</td>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                          {bodegaRows.map(({ cat, rows }) => (
+                            <React.Fragment key={cat}>
+                              <tr className="bg-slate-800/70">
+                                <td colSpan={14} className="px-4 py-2 font-black text-[10px] text-slate-300 uppercase tracking-widest border-y border-slate-700">{cat.toUpperCase()}</td>
                               </tr>
-                            );
-                          })}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              {rows.map(({ p, inicialBodega, recargas_barras, cortesias_total, bajas_total, final_total, vendido, ventaTotal, comisionUnit, totalComision, totalProducto, costoProducto }) => (
+                                <tr key={p.id} className="hover:bg-slate-800/50 transition-colors">
+                                  <td className="p-3 border-r border-slate-800 font-bold text-slate-100">{p.nombre}</td>
+                                  <td className="p-3 border-r border-slate-800 text-slate-400">{(p as any).presentacion || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{inicialBodega || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{recargas_barras || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{cortesias_total || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{bajas_total || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{final_total}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400 bg-emerald-950/20">{vendido}</td>
+                                  <td className="p-3 border-r border-slate-800 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>
+                                  <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-300">{comisionUnit ? fmt(comisionUnit) : ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-400">{totalComision ? fmt(totalComision) : ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-300 bg-indigo-950/20">{totalProducto}</td>
+                                  <td className="p-3 text-right font-mono text-violet-300 bg-violet-950/20">{costoProducto ? fmt(costoProducto) : ''}</td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                          <tr className="bg-emerald-900/40 border-t-2 border-emerald-600/40">
+                            <td colSpan={9} className="p-3 text-right font-black text-emerald-300 uppercase tracking-widest text-[10px]">TOTAL</td>
+                            <td className="p-3 text-right font-black text-emerald-400 bg-emerald-950/50">{fmt(grandTotalVenta)}</td>
+                            <td className="p-3"></td>
+                            <td className="p-3 text-right font-black text-amber-400">{grandTotalComision ? fmt(grandTotalComision) : ''}</td>
+                            <td className="p-3"></td>
+                            <td className="p-3 text-right font-black text-violet-300">{grandTotalCosto ? fmt(grandTotalCosto) : ''}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="rounded-2xl border border-amber-800/40 bg-amber-950/20 overflow-hidden">
+                        <div className="px-4 py-2 bg-amber-900/40 text-amber-300 text-[10px] font-black uppercase tracking-widest">FALTANTE POR PAGAR</div>
+                        <div className="divide-y divide-slate-800/60">
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">COMISIONES</span><span className="text-amber-400 font-black">{fmt(grandTotalComision)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">PROPINAS</span><span className="text-amber-400 font-black">{fmt(propinas_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs bg-amber-900/30"><span className="text-amber-300 font-black uppercase">TOTAL</span><span className="text-amber-300 font-black">{fmt(grandTotalComision + propinas_total)}</span></div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/20 overflow-hidden">
+                        <div className="px-4 py-2 bg-emerald-900/40 text-emerald-300 text-[10px] font-black uppercase tracking-widest">RECAUDADO</div>
+                        <div className="divide-y divide-slate-800/60">
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">efectivo</span><span className="text-slate-200 font-black">{fmt(efectivo_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">datafono</span><span className="text-slate-200 font-black">{fmt(datafono_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">gastos</span><span className="text-rose-400 font-black">-{fmt(gastos_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs bg-slate-800/40"><span className="text-slate-300 font-black uppercase">TOTAL</span><span className="text-slate-200 font-black">{fmt(efectivo_total + datafono_total - gastos_total)}</span></div>
+                          <div className="flex justify-between px-4 py-3 bg-emerald-900/40">
+                            <span className="text-emerald-300 font-black uppercase text-sm">UTILIDAD</span>
+                            <span className={`font-black text-sm ${utilidad >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmt(utilidad)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })() : (
+                /* BARRA INDIVIDUAL (cuando la bodega muestra su pestaña como barra) */
+                <div className="overflow-x-auto rounded-2xl border border-slate-800 shadow-xl bg-slate-900">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-800 text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-slate-700">
+                        <th className="p-3 border-r border-slate-700/60 text-center w-12 text-slate-500">#</th>
+                        <th className="p-3 border-r border-slate-700/60 font-bold">Producto</th>
+                        <th className="p-3 border-r border-slate-700/60 text-right font-bold">Valor</th>
+                        <th className="p-3 border-r border-slate-700/60 text-center font-bold">Inicial</th>
+                        <th className="p-3 border-r border-slate-700/60 text-center font-bold text-indigo-300">Recarga</th>
+                        <th className="p-3 border-r border-slate-700/60 text-center font-bold text-amber-300">Cortesia</th>
+                        <th className="p-3 border-r border-slate-700/60 text-center font-bold text-rose-300">Bajas</th>
+                        <th className="p-3 border-r border-slate-700/60 text-center font-bold text-cyan-300">Final</th>
+                        <th className="p-3 border-r border-slate-700/60 text-center font-bold text-emerald-300">Venta</th>
+                        <th className="p-3 text-right font-bold text-emerald-400">Venta total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80 text-slate-200">
+                      {categorias.map(cat => {
+                        const prods = productos.filter(p => p.categoria === cat);
+                        return (
+                          <React.Fragment key={cat}>
+                            <tr className="bg-slate-800/40"><td colSpan={10} className="px-4 py-2 border-y border-slate-800 text-emerald-400 font-black text-[10px] uppercase">▶ {cat.toUpperCase()}</td></tr>
+                            {prods.map((p, idx) => {
+                              const ini = Number(inventarioInicial[p.id]?.cantidad || 0);
+                              const rec = recargas.filter(r => r.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                              const cor = cortesias.filter(c => c.producto_id === p.id).reduce((a, b) => a + Number(b.cantidad), 0);
+                              const per = perdidas.filter(l => l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a, b) => a + Number(b.cantidad), 0);
+                              const fin = finCount[p.id] !== undefined ? Number(finCount[p.id]) : Math.max(0, ini + rec - cor - per);
+                              const vendidoUnd = Math.max(0, ini + rec - fin - cor - per);
+                              const ventaTotal = vendidoUnd * p.precio;
+                              return (
+                                <tr key={p.id} className="hover:bg-slate-800/60 transition-colors">
+                                  <td className="p-3 text-center border-r border-slate-800 text-[10px] text-slate-600">{idx + 1}</td>
+                                  <td className="p-3 border-r border-slate-800 font-bold text-slate-100">{p.nombre}</td>
+                                  <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{ini || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{rec || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{cor || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{per || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{fin}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400 bg-emerald-950/20">{vendidoUnd}</td>
+                                  <td className="p-3 text-right font-black text-emerald-400 bg-emerald-950/30">{fmt(ventaTotal)}</td>
+                                </tr>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
+
+
+
+
+
+
 
           {activeSheet.startsWith('bar_') && globalData && (
             <div className="space-y-4">
@@ -189,62 +297,59 @@ export default function ExcelPreview({
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-800 text-[10px] font-black text-emerald-400 uppercase tracking-widest border-b border-slate-700">
-                          <th className="p-3 border-r border-slate-700">PRODUCTO</th>
-                          <th className="p-3 border-r border-slate-700 text-right">PRECIO</th>
-                          <th className="p-3 border-r border-slate-700 text-center">INICIAL</th>
-                          <th className="p-3 border-r border-slate-700 text-center text-indigo-400">RECARGAS</th>
-                          <th className="p-3 border-r border-slate-700 text-center text-amber-400">CORTESÍAS</th>
-                          <th className="p-3 border-r border-slate-700 text-center text-rose-400">BAJAS</th>
-                          <th className="p-3 border-r border-slate-700 text-center text-cyan-400">FINAL</th>
-                          <th className="p-3 border-r border-slate-700 text-center text-emerald-400">VENDIDO (UND)</th>
-                          <th className="p-3 border-r border-slate-700 text-right text-emerald-400">VENTA TOTAL ($)</th>
-                          <th className="p-3 border-r border-slate-700 text-right text-amber-300">COMISIÓN UNIT</th>
-                          <th className="p-3 border-r border-slate-700 text-right text-amber-400">TOTAL COMISIÓN</th>
-                          <th className="p-3 border-r border-slate-700 text-center text-indigo-300">TOTAL PRODUCTO</th>
-                          <th className="p-3 text-right text-violet-300">COSTO PRODUCTO ($)</th>
+                          <th className="p-3 border-r border-slate-700 font-bold">Producto</th>
+                          <th className="p-3 border-r border-slate-700 text-right font-bold">Valor</th>
+                          <th className="p-3 border-r border-slate-700 text-center font-bold">Inicial</th>
+                          <th className="p-3 border-r border-slate-700 text-center font-bold text-indigo-400">Recarga</th>
+                          <th className="p-3 border-r border-slate-700 text-center font-bold text-amber-400">Cortesia</th>
+                          <th className="p-3 border-r border-slate-700 text-center font-bold text-rose-400">Bajas</th>
+                          <th className="p-3 border-r border-slate-700 text-center font-bold text-cyan-400">Final</th>
+                          <th className="p-3 border-r border-slate-700 text-center font-bold text-emerald-400">Venta</th>
+                          <th className="p-3 text-right font-bold text-emerald-400">Venta total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800 text-slate-200">
-                        {productos.map(p => {
-                          const bIni = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          const bRec = globalData.recargas.filter((r: any) => r.evento_id === bEv.id && r.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          const bCor = globalData.cortesias.filter((c: any) => c.evento_id === bEv.id && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          // Solo pérdidas reales de esa barra (excluye traslados a otras barras/bodega y clonaciones)
-                          const bPer = globalData.perdidas.filter((l: any) =>
-                            l.evento_id === bEv.id &&
-                            l.producto_id === p.id &&
-                            !l.motivo?.startsWith('Traslado enviado') &&
-                            !l.motivo?.startsWith('Traslado a ') &&
-                            !l.motivo?.startsWith('Devolución Bodega') &&
-                            !l.motivo?.startsWith('Clonación')
-                          ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          const bFin = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
-                          const consumo = Math.max(0, bIni + bRec - bFin);
-                          const vendidoUnd = Math.max(0, consumo - bCor - bPer);
-                          const ventaVal = vendidoUnd * p.precio;
-                          const comisionUnit = p.comision || 0;
-                          const totalComision = vendidoUnd * comisionUnit;
-                          const totalProducto = vendidoUnd + bCor;
-                          const costoProducto = totalProducto * (p.costo || 0);
-
-                          if (bIni + bRec === 0 && bFin === 0) return null;
-
+                        {categorias.map(cat => {
+                          const prodsCat = productos.filter(p => p.categoria === cat);
                           return (
-                            <tr key={p.id} className="hover:bg-slate-800/60">
-                              <td className="p-3 border-r border-slate-800 font-bold">{p.nombre}</td>
-                              <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
-                              <td className="p-3 border-r border-slate-800 text-center">{bIni}</td>
-                              <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{bRec}</td>
-                              <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{bCor}</td>
-                              <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{bPer}</td>
-                              <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{bFin}</td>
-                              <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400">{vendidoUnd}</td>
-                              <td className="p-3 border-r border-slate-800 text-right font-black text-emerald-400">{fmt(ventaVal)}</td>
-                              <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-300">{fmt(comisionUnit)}</td>
-                              <td className="p-3 border-r border-slate-800 text-right font-mono text-amber-400">{fmt(totalComision)}</td>
-                              <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-300">{totalProducto}</td>
-                              <td className="p-3 text-right font-mono text-violet-300">{fmt(costoProducto)}</td>
-                            </tr>
+                            <React.Fragment key={cat}>
+                              <tr className="bg-slate-800/60 font-black text-[10px] text-slate-300 uppercase tracking-widest">
+                                <td colSpan={9} className="px-4 py-2 bg-slate-800 border-y border-slate-700 text-emerald-400">
+                                  {cat.toUpperCase()}
+                                </td>
+                              </tr>
+                              {prodsCat.map(p => {
+                                const bIni = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                                const bRec = globalData.recargas.filter((r: any) => r.evento_id === bEv.id && r.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                                const bCor = globalData.cortesias.filter((c: any) => c.evento_id === bEv.id && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                                const bPer = globalData.perdidas.filter((l: any) =>
+                                  l.evento_id === bEv.id &&
+                                  l.producto_id === p.id &&
+                                  !l.motivo?.startsWith('Traslado enviado') &&
+                                  !l.motivo?.startsWith('Traslado a ') &&
+                                  !l.motivo?.startsWith('Devolución Bodega') &&
+                                  !l.motivo?.startsWith('Clonación')
+                                ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                                const bFin = globalData.inventario.filter((i: any) => i.evento_id === bEv.id && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                                const consumo = Math.max(0, bIni + bRec - bFin);
+                                const vendidoUnd = Math.max(0, consumo - bCor - bPer);
+                                const ventaVal = vendidoUnd * p.precio;
+
+                                return (
+                                  <tr key={p.id} className="hover:bg-slate-800/60">
+                                    <td className="p-3 border-r border-slate-800 font-bold">{p.nombre}</td>
+                                    <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
+                                    <td className="p-3 border-r border-slate-800 text-center font-bold">{bIni || ''}</td>
+                                    <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{bRec || ''}</td>
+                                    <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{bCor || ''}</td>
+                                    <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{bPer || ''}</td>
+                                    <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{bFin}</td>
+                                    <td className="p-3 border-r border-slate-800 text-center font-black text-emerald-400">{vendidoUnd}</td>
+                                    <td className="p-3 text-right font-black text-emerald-400">{fmt(ventaVal)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>

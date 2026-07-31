@@ -900,7 +900,7 @@ export default function BarraProApp() {
     await api.createCierreDinero({ ...dinero, evento_id: state.evento.id });
     await api.closeEvento(state.evento.id);
 
-    // DEVOLVER A BODEGA SI SE SOLICITÓ
+    // DEVOLVER A BODEGA SI SE SOLICITÓ (Ajustar despachos y sumar sobrantes al inventario de Bodega)
     if (devolverABodega) {
       let bId = bodegaData?.id;
       if (!bId) {
@@ -912,24 +912,75 @@ export default function BarraProApp() {
       }
 
       if (bId) {
-        const time = nowTime();
-        const itemsRetorno = Object.entries(inventarioFinal)
-          .filter(([_, cant]) => cant > 0)
-          .map(([prodId, cant]) => ({
-            id: uid(),
-            evento_id: bId,
-            producto_id: prodId,
-            cantidad: cant,
-            proveedor: `RETORNO: ${state.evento!.nombre}`,
-            hora: time
-          }));
-        
-        // Procesar recargas de retorno en bodega
-        for (const item of itemsRetorno) {
-          await api.createRecarga(item);
+        const bodegaEvData = await api.getEventoData(bId);
+        let retCount = 0;
+        const barName = state.evento.nombre;
+
+        for (const [prodId, cant] of Object.entries(inventarioFinal)) {
+          if (cant <= 0) continue;
+          retCount++;
+          
+          // 1. Buscar despachos (pérdidas) registrados en Bodega hacia esta barra para este producto
+          const perdidasDespacho = (bodegaEvData.perdidas || []).filter((p: any) =>
+            p.producto_id === prodId &&
+            (p.motivo?.includes(barName) || p.motivo?.startsWith('Traslado a ') || p.motivo?.startsWith('Clonación'))
+          );
+
+          let cantRestantePorDevolver = cant;
+
+          // Reducir el despacho previo en Bodega pues el producto retornó
+          for (const pDesp of perdidasDespacho) {
+            if (cantRestantePorDevolver <= 0) break;
+            const pCant = Number(pDesp.cantidad);
+            if (pCant <= cantRestantePorDevolver) {
+              cantRestantePorDevolver -= pCant;
+              await api.deleteRecord('perdidas', pDesp.id);
+            } else {
+              const newCant = pCant - cantRestantePorDevolver;
+              cantRestantePorDevolver = 0;
+              await api.updateRecord('perdidas', pDesp.id, { cantidad: newCant });
+            }
+          }
+
+          // 2. Si todavía queda remanente devuelto (o no hubo despachos a restar), sumar al inventario inicial de Bodega
+          if (cantRestantePorDevolver > 0) {
+            const currentIniItem = bodegaEvData.inventario.find(
+              (i: any) => i.producto_id === prodId && i.tipo === 'inicial'
+            );
+            const currentQty = currentIniItem ? Number(currentIniItem.cantidad) : 0;
+            const currentProv = currentIniItem?.proveedor || 'BODEGA CENTRAL';
+            const newQty = currentQty + cantRestantePorDevolver;
+
+            await api.upsertInventarioInicial(bId, prodId, newQty, currentProv);
+          }
+        }
+
+        if (retCount > 0) {
+          // Refrescar data de bodega para sincronizar despachos e inventario inicial en vivo
+          const freshBodega = await api.getEventoData(bId);
+          setBodegaData(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              inventario: freshBodega.inventario,
+              perdidas: freshBodega.perdidas
+            };
+          });
+
+          if (state.evento.id === bId) {
+            const newIniMap: Record<string, { cantidad: number; proveedor: string }> = {};
+            freshBodega.inventario.filter(i => i.tipo === 'inicial').forEach(i => {
+              newIniMap[i.producto_id] = { cantidad: Number(i.cantidad), proveedor: i.proveedor };
+            });
+            setState(s => ({
+              ...s,
+              inventarioInicial: newIniMap,
+              perdidas: freshBodega.perdidas
+            }));
+          }
         }
         
-        addLog(`🔄 ${itemsRetorno.length} productos devueltos a Bodega Central`, 'info');
+        addLog(`🔄 ${retCount} productos devueltos a Bodega Central (despachos ajustados)`, 'info');
       }
     }
   };
