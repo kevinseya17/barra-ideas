@@ -533,11 +533,13 @@ export default function Operacion({
             const movs = Array.from(allProdIds).map(pid => {
               const prod = productos.find(p => p.id === pid);
               const inicial = inventarioInicial[pid]?.cantidad ?? 0;
-              const despachado = perdidas.filter(p => p.producto_id === pid).reduce((s, p) => s + Number(p.cantidad), 0);
-              const retornado = recargas.filter(r => r.producto_id === pid).reduce((s, r) => s + Number(r.cantidad), 0);
-              const stockActual = inicial - despachado + retornado;
-              return { pid, prod, inicial, despachado, retornado, stockActual };
-            }).filter(m => m.inicial > 0 || m.despachado > 0 || m.retornado > 0);
+              const despachado = perdidas.filter(p => p.producto_id === pid && (p.motivo?.startsWith('Traslado a ') || p.motivo?.startsWith('Clonación'))).reduce((s, p) => s + Number(p.cantidad), 0);
+              const cortesiasBodega = cortesias.filter(c => c.producto_id === pid).reduce((s, c) => s + Number(c.cantidad), 0);
+              const mermasBodega = perdidas.filter(p => p.producto_id === pid && !p.motivo?.startsWith('Traslado a ') && !p.motivo?.startsWith('Clonación')).reduce((s, p) => s + Number(p.cantidad), 0);
+              const realRecargas = recargas.filter(r => r.producto_id === pid && !r.proveedor?.startsWith('RETORNO:') && !r.proveedor?.startsWith('Devolución')).reduce((s, r) => s + Number(r.cantidad), 0);
+              const stockActual = inicial + realRecargas - despachado - cortesiasBodega - mermasBodega;
+              return { pid, prod, inicial, despachado, retornado: realRecargas, stockActual };
+            }).filter(m => m.inicial > 0 || m.despachado > 0 || m.retornado > 0 || m.stockActual > 0);
 
             if (movs.length === 0) return null;
 

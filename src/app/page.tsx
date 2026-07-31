@@ -1110,16 +1110,20 @@ export default function BarraProApp() {
     ]);
     allProdIds.forEach(pid => {
       const inicial = state.inventarioInicial[pid]?.cantidad ?? 0;
-      // pérdidas de bodega = despachos a barras
       const despachado = state.perdidas
-        .filter(p => p.producto_id === pid)
+        .filter(p => p.producto_id === pid && (p.motivo?.startsWith('Traslado a ') || p.motivo?.startsWith('Clonación')))
         .reduce((s, p) => s + Number(p.cantidad), 0);
-      // recargas de bodega = retornos de barras
-      const retornado = state.recargas
-        .filter(r => r.producto_id === pid)
+      const cortesiasBodega = state.cortesias
+        .filter(c => c.producto_id === pid)
+        .reduce((s, c) => s + Number(c.cantidad), 0);
+      const mermasBodega = state.perdidas
+        .filter(p => p.producto_id === pid && !p.motivo?.startsWith('Traslado a ') && !p.motivo?.startsWith('Clonación'))
+        .reduce((s, p) => s + Number(p.cantidad), 0);
+      const realRecargas = state.recargas
+        .filter(r => r.producto_id === pid && !r.proveedor?.startsWith('RETORNO:') && !r.proveedor?.startsWith('Devolución'))
         .reduce((s, r) => s + Number(r.cantidad), 0);
-      const stockActual = inicial - despachado + retornado;
-      bodegaMovimientos.push({ producto_id: pid, inicial, despachado, retornado, stockActual });
+      const stockActual = inicial + realRecargas - despachado - cortesiasBodega - mermasBodega;
+      bodegaMovimientos.push({ producto_id: pid, inicial, despachado, retornado: realRecargas, stockActual });
     });
   }
 
