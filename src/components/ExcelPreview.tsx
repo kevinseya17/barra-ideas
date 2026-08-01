@@ -99,22 +99,28 @@ export default function ExcelPreview({
                 const bodegaRows = categorias.map(cat => {
                   const catProds = productos.filter(p => p.categoria === cat);
                   const rows = catProds.map(p => {
-                    const inicialBodega = Number(inventarioInicial[p.id]?.cantidad || 0);
-                    const recargas_barras = barrasIds.reduce((sum: number, bId: string) =>
-                      sum + (globalData?.recargas?.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0), 0);
-                    const cortesias_total = globalData?.cortesias?.filter((c: any) => barrasIds.includes(c.evento_id) && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                    const bajas_total = globalData?.perdidas?.filter((l: any) => barrasIds.includes(l.evento_id) && l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                    const final_total = barrasIds.reduce((sum: number, bId: string) =>
-                      sum + (globalData?.inventario?.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0), 0);
-                    let vendido = 0;
-                    barrasIds.forEach((bId: string) => {
-                      const bIni = globalData?.inventario?.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                      const bRec = globalData?.recargas?.filter((r: any) => r.evento_id === bId && r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                      const bFin = globalData?.inventario?.filter((i: any) => i.evento_id === bId && i.producto_id === p.id && i.tipo === 'final').reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                      const bBajas = globalData?.perdidas?.filter((l: any) => l.evento_id === bId && l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación')).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                      const bCor = globalData?.cortesias?.filter((c: any) => c.evento_id === bId && c.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
-                      vendido += Math.max(0, bIni + bRec - bFin - bCor - bBajas);
-                    });
+                    const inicial_total = globalData?.inventario
+                      ?.filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial' && i.proveedor !== 'BODEGA CENTRAL' && !i.proveedor?.startsWith('Traslado desde'))
+                      .reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+
+                    const recargas_total = globalData?.recargas
+                      ?.filter((r: any) => r.producto_id === p.id && !r.proveedor?.startsWith('RETORNO:') && !r.proveedor?.startsWith('Devolución') && !r.proveedor?.startsWith('Traslado desde') && r.proveedor !== 'BODEGA CENTRAL')
+                      .reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+
+                    const cortesias_total = globalData?.cortesias
+                      ?.filter((c: any) => c.producto_id === p.id)
+                      .reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+
+                    const bajas_total = globalData?.perdidas
+                      ?.filter((l: any) => l.producto_id === p.id && !l.motivo?.startsWith('Traslado enviado') && !l.motivo?.startsWith('Traslado a ') && !l.motivo?.startsWith('Devolución Bodega') && !l.motivo?.startsWith('Clonación'))
+                      .reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+
+                    const final_total = globalData?.inventario
+                      ?.filter((i: any) => i.producto_id === p.id && i.tipo === 'final')
+                      .reduce((a: number, b: any) => a + Number(b.cantidad), 0) || 0;
+
+                    const consumo_sys = Math.max(0, inicial_total + recargas_total - final_total);
+                    const vendido = Math.max(0, consumo_sys - cortesias_total - bajas_total);
                     const ventaTotal = vendido * p.precio;
                     const comisionUnit = p.comision || 0;
                     const totalComision = vendido * comisionUnit;
@@ -123,13 +129,14 @@ export default function ExcelPreview({
                     grandTotalVenta += ventaTotal;
                     grandTotalComision += totalComision;
                     grandTotalCosto += costoProducto;
-                    return { p, inicialBodega, recargas_barras, cortesias_total, bajas_total, final_total, vendido, ventaTotal, comisionUnit, totalComision, totalProducto, costoProducto };
+                    return { p, inicial_total, recargas_total, cortesias_total, bajas_total, final_total, vendido, ventaTotal, comisionUnit, totalComision, totalProducto, costoProducto };
                   });
                   return { cat, rows };
                 });
 
-                const efectivo_total = globalData?.dinero?.efectivo || 0;
-                const datafono_total = globalData?.dinero?.datafono || 0;
+                const efectivo_total = (globalData?.dineros || []).reduce((a: number, b: any) => a + Number(b.efectivo || 0), 0);
+                const datafono_total = (globalData?.dineros || []).reduce((a: number, b: any) => a + Number(b.datafono || 0), 0);
+                const nequi_total    = (globalData?.dineros || []).reduce((a: number, b: any) => a + Number(b.nequi    || 0), 0);
                 const gastos_total = (globalData?.gastos || []).reduce((a: number, b: any) => a + Number(b.monto), 0);
                 const propinas_total = globalData?.propinas || 0;
                 const utilidad = grandTotalVenta - grandTotalCosto - grandTotalComision - gastos_total;
@@ -162,13 +169,13 @@ export default function ExcelPreview({
                               <tr className="bg-slate-800/70">
                                 <td colSpan={14} className="px-4 py-2 font-black text-[10px] text-slate-300 uppercase tracking-widest border-y border-slate-700">{cat.toUpperCase()}</td>
                               </tr>
-                              {rows.map(({ p, inicialBodega, recargas_barras, cortesias_total, bajas_total, final_total, vendido, ventaTotal, comisionUnit, totalComision, totalProducto, costoProducto }) => (
+                              {rows.map(({ p, inicial_total, recargas_total, cortesias_total, bajas_total, final_total, vendido, ventaTotal, comisionUnit, totalComision, totalProducto, costoProducto }) => (
                                 <tr key={p.id} className="hover:bg-slate-800/50 transition-colors">
                                   <td className="p-3 border-r border-slate-800 font-bold text-slate-100">{p.nombre}</td>
                                   <td className="p-3 border-r border-slate-800 text-slate-400">{(p as any).presentacion || ''}</td>
                                   <td className="p-3 border-r border-slate-800 text-right font-mono text-slate-400">{fmt(p.precio)}</td>
-                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{inicialBodega || ''}</td>
-                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{recargas_barras || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-slate-300">{inicial_total || ''}</td>
+                                  <td className="p-3 border-r border-slate-800 text-center font-bold text-indigo-400">{recargas_total || ''}</td>
                                   <td className="p-3 border-r border-slate-800 text-center font-bold text-amber-400">{cortesias_total || ''}</td>
                                   <td className="p-3 border-r border-slate-800 text-center font-bold text-rose-400">{bajas_total || ''}</td>
                                   <td className="p-3 border-r border-slate-800 text-center font-bold text-cyan-400">{final_total}</td>
@@ -206,10 +213,11 @@ export default function ExcelPreview({
                       <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/20 overflow-hidden">
                         <div className="px-4 py-2 bg-emerald-900/40 text-emerald-300 text-[10px] font-black uppercase tracking-widest">RECAUDADO</div>
                         <div className="divide-y divide-slate-800/60">
-                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">efectivo</span><span className="text-slate-200 font-black">{fmt(efectivo_total)}</span></div>
-                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">datafono</span><span className="text-slate-200 font-black">{fmt(datafono_total)}</span></div>
-                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">gastos</span><span className="text-rose-400 font-black">-{fmt(gastos_total)}</span></div>
-                          <div className="flex justify-between px-4 py-2 text-xs bg-slate-800/40"><span className="text-slate-300 font-black uppercase">TOTAL</span><span className="text-slate-200 font-black">{fmt(efectivo_total + datafono_total - gastos_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">EFECTIVO</span><span className="text-slate-200 font-black">{fmt(efectivo_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">DATÁFONO</span><span className="text-slate-200 font-black">{fmt(datafono_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">NEQUI / QR</span><span className="text-violet-300 font-black">{fmt(nequi_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs"><span className="text-slate-400 font-bold">GASTOS</span><span className="text-rose-400 font-black">-{fmt(gastos_total)}</span></div>
+                          <div className="flex justify-between px-4 py-2 text-xs bg-slate-800/40"><span className="text-slate-300 font-black uppercase">TOTAL</span><span className="text-slate-200 font-black">{fmt(efectivo_total + datafono_total + nequi_total - gastos_total)}</span></div>
                           <div className="flex justify-between px-4 py-3 bg-emerald-900/40">
                             <span className="text-emerald-300 font-black uppercase text-sm">UTILIDAD</span>
                             <span className={`font-black text-sm ${utilidad >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmt(utilidad)}</span>

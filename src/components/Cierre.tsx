@@ -357,40 +357,6 @@ export default function Cierre({
         </button>
       </div>
 
-      {/* Panel de Status en Tiempo Real */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <Card className="p-5 border-l-4 border-l-cyan-500 bg-cyan-50/30">
-          <div className="flex items-center gap-3 mb-2">
-            <TrendingUp size={16} className="text-cyan-600" />
-            <span className="text-[10px] font-black text-cyan-600 uppercase tracking-widest">Ventas Esperadas</span>
-          </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(esperadoVentas)}</p>
-          <p className="text-[10px] text-slate-400 font-bold mt-1">Calculado según inventario</p>
-        </Card>
-
-        <Card className="p-5 border-l-4 border-l-indigo-500 bg-indigo-50/30">
-          <div className="flex items-center gap-3 mb-2">
-            <DollarSign size={16} className="text-indigo-600" />
-            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Dinero en Caja</span>
-          </div>
-          <p className="text-2xl font-black text-slate-900">{fmt(totalRecaudado)}</p>
-          <p className="text-[10px] text-slate-400 font-bold mt-1">Total ingresado abajo</p>
-        </Card>
-
-        <Card className={`p-5 border-l-4 transition-colors ${Math.abs(diferencia) < 100 ? 'border-l-emerald-500 bg-emerald-50/30' : 'border-l-rose-500 bg-rose-50/30'}`}>
-          <div className="flex items-center gap-3 mb-2">
-            {Math.abs(diferencia) < 100 ? <Calculator size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-rose-600" />}
-            <span className={`text-[10px] font-black uppercase tracking-widest ${Math.abs(diferencia) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>Diferencia (Cuadre)</span>
-          </div>
-          <p className={`text-2xl font-black ${Math.abs(diferencia) < 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
-            {diferencia > 0 ? '+' : ''}{fmt(diferencia)}
-          </p>
-          <p className={`text-[10px] font-bold mt-1 ${Math.abs(diferencia) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>
-            {Math.abs(diferencia) < 100 ? '✨ ¡Caja Cuadrada!' : '⚠️ Revisa el inventario'}
-          </p>
-        </Card>
-      </div>
-
       {/* Inventario final */}
       <Card className="p-8 mb-8">
         <div className="flex items-center gap-3 mb-8">
@@ -444,7 +410,10 @@ export default function Cierre({
                 {vendidoUnd !== null && (
                   <div className={`mt-3 pt-3 border-t border-slate-200 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200`}>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      ({disp} en sistema - {finVal} final)
+                      ({disp} sistema
+                      {perUnd > 0 && <span className="text-rose-400"> - {perUnd} bajas</span>}
+                      {corUnd > 0 && <span className="text-amber-500"> - {corUnd} cort.</span>}
+                      {` - ${finVal} físico`})
                     </p>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl ${vendidoUnd >= 0 ? 'bg-emerald-50 border border-emerald-100' : 'bg-rose-50 border border-rose-100'}`}>
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vendiste ~</span>
@@ -465,6 +434,40 @@ export default function Cierre({
           })}
         </div>
       </Card>
+
+      {/* Panel de Status — junto al recaudo para no tener que subir */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="p-5 border-l-4 border-l-cyan-500 bg-cyan-50/30">
+          <div className="flex items-center gap-3 mb-2">
+            <TrendingUp size={16} className="text-cyan-600" />
+            <span className="text-[10px] font-black text-cyan-600 uppercase tracking-widest">Ventas Esperadas</span>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(esperadoVentas)}</p>
+          <p className="text-[10px] text-slate-400 font-bold mt-1">Calculado según inventario</p>
+        </Card>
+
+        <Card className="p-5 border-l-4 border-l-indigo-500 bg-indigo-50/30">
+          <div className="flex items-center gap-3 mb-2">
+            <DollarSign size={16} className="text-indigo-600" />
+            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Dinero en Caja</span>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{fmt(totalRecaudado)}</p>
+          <p className="text-[10px] text-slate-400 font-bold mt-1">Total ingresado abajo</p>
+        </Card>
+
+        <Card className={`p-5 border-l-4 transition-colors ${Math.abs(diferencia) < 100 ? 'border-l-emerald-500 bg-emerald-50/30' : 'border-l-rose-500 bg-rose-50/30'}`}>
+          <div className="flex items-center gap-3 mb-2">
+            {Math.abs(diferencia) < 100 ? <Calculator size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-rose-600" />}
+            <span className={`text-[10px] font-black uppercase tracking-widest ${Math.abs(diferencia) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>Diferencia (Cuadre)</span>
+          </div>
+          <p className={`text-2xl font-black ${Math.abs(diferencia) < 100 ? 'text-emerald-700' : 'text-rose-700'}`}>
+            {diferencia > 0 ? '+' : ''}{fmt(diferencia)}
+          </p>
+          <p className={`text-[10px] font-bold mt-1 ${Math.abs(diferencia) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {Math.abs(diferencia) < 100 ? '✨ ¡Caja Cuadrada!' : '⚠️ Revisa el inventario'}
+          </p>
+        </Card>
+      </div>
 
       {/* Dinero */}
       <Card className="p-8 mb-8">

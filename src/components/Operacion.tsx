@@ -742,7 +742,7 @@ export default function Operacion({
                         <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-amber-500">Cort.<span className="hidden sm:inline">esías</span></th>
                         <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-rose-500">Bajas</th>
                         <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest text-cyan-500">Desc.</th>
-                        <th className="px-6 py-4 text-right text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{verGlobal ? 'Stock Final' : 'En Bodega'}</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{verGlobal ? 'Total en Sistema' : 'En Bodega'}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -756,7 +756,14 @@ export default function Operacion({
                           let ini = 0, rec = 0, desp = 0, cor = 0, per = 0, descCount = 0;
 
                           if (verGlobal && globalData) {
-                            ini = globalData.inventario.filter((i: any) => i.producto_id === p.id && i.tipo === 'inicial').reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            // ✅ FIX: Excluir iniciales de barras que vienen de bodega (proveedor='BODEGA CENTRAL' o 'Traslado desde')
+                            // Esos ya están contabilizados en las recargas de la bodega y sumarlos generaba doble conteo
+                            ini = globalData.inventario.filter((i: any) => 
+                              i.producto_id === p.id && 
+                              i.tipo === 'inicial' &&
+                              i.proveedor !== 'BODEGA CENTRAL' &&
+                              !i.proveedor?.startsWith('Traslado desde')
+                            ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
                             rec = globalData.recargas.filter((r: any) => 
                               r.producto_id === p.id && 
                               !r.proveedor.startsWith('RETORNO:') && 
@@ -773,6 +780,8 @@ export default function Operacion({
                               !l.motivo.startsWith('Clonación')
                             ).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
                             descCount = globalData.descuentos.filter((d: any) => d.producto_id === p.id).reduce((a: number, b: any) => a + Number(b.cantidad), 0);
+                            // ✅ Los traslados bodega→barras son INTERNOS: no reducen el stock global
+                            // Solo cor y per (bajas reales) reducen el inventario del sistema
                             desp = 0;
                           } else {
                             ini = inventarioInicial[p.id]?.cantidad ?? 0;
