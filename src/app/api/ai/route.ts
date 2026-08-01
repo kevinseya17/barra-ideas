@@ -1,137 +1,147 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Allow up to 120 seconds for local Ollama responses
+export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  // Fetch live system context
+  let liveContext = '';
   try {
-    const { messages, contextData } = await req.json();
-    const userPrompt = messages?.[messages.length - 1]?.content || '';
+    const { data: openEvents } = await supabase
+      .from('eventos')
+      .select('id, nombre, estado')
+      .in('estado', ['abierto', 'congelado']);
+    const { data: productos } = await supabase
+      .from('productos')
+      .select('id, nombre, categoria, precio, costo, comision')
+      .eq('activo', true);
 
-    // Fetch live system context if not provided
-    let liveContext = '';
+    if (openEvents && openEvents.length > 0) {
+      const baseName = openEvents[0].nombre.replace('BODEGA - ', '').split(' - ')[0];
+      const { data: allRelated } = await supabase.from('eventos').select('id, nombre');
+      const relatedIds = (allRelated || [])
+        .filter(e =>
+          e.nombre === `BODEGA - ${baseName}` ||
+          e.nombre === baseName ||
+          e.nombre.startsWith(`${baseName} - `)
+        )
+        .map(e => e.id);
 
-    try {
-      // Fetch open events
-      const { data: openEvents } = await supabase.from('eventos').select('id, nombre, estado').in('estado', ['abierto', 'congelado']);
-      const { data: productos } = await supabase.from('productos').select('id, nombre, categoria, precio, costo, comision').eq('activo', true);
+      const ids = relatedIds.length > 0 ? relatedIds : [openEvents[0].id];
+      const [recargas, cortesias, perdidas, gastos, dineros] = await Promise.all([
+        supabase.from('recargas').select('producto_id, cantidad, proveedor').in('evento_id', ids),
+        supabase.from('cortesias').select('producto_id, cantidad, persona, motivo').in('evento_id', ids),
+        supabase.from('perdidas').select('producto_id, cantidad, motivo').in('evento_id', ids),
+        supabase.from('gastos').select('monto, concepto, metodo').in('evento_id', ids),
+        supabase.from('cierres_dinero').select('efectivo, datafono, nequi').in('evento_id', ids),
+      ]);
 
-      if (openEvents && openEvents.length > 0) {
-        const baseName = openEvents[0].nombre.replace('BODEGA - ', '').split(' - ')[0];
-        
-        const { data: allRelated } = await supabase.from('eventos').select('id, nombre');
-        const relatedIds = (allRelated || [])
-          .filter(e => e.nombre === `BODEGA - ${baseName}` || e.nombre === baseName || e.nombre.startsWith(`${baseName} - `))
-          .map(e => e.id);
+      const totalEfectivo = (dineros?.data || []).reduce((a, b) => a + Number(b.efectivo || 0), 0);
+      const totalDatafono = (dineros?.data || []).reduce((a, b) => a + Number(b.datafono || 0), 0);
+      const totalNequi    = (dineros?.data || []).reduce((a, b) => a + Number(b.nequi    || 0), 0);
+      const totalGastos   = (gastos?.data   || []).reduce((a, b) => a + Number(b.monto   || 0), 0);
 
-        const [recargas, cortesias, perdidas, gastos, dineros, inventario] = await Promise.all([
-          supabase.from('recargas').select('producto_id, cantidad, proveedor').in('evento_id', relatedIds.length > 0 ? relatedIds : [openEvents[0].id]),
-          supabase.from('cortesias').select('producto_id, cantidad, persona, motivo').in('evento_id', relatedIds.length > 0 ? relatedIds : [openEvents[0].id]),
-          supabase.from('perdidas').select('producto_id, cantidad, motivo').in('evento_id', relatedIds.length > 0 ? relatedIds : [openEvents[0].id]),
-          supabase.from('gastos').select('monto, concepto, metodo').in('evento_id', relatedIds.length > 0 ? relatedIds : [openEvents[0].id]),
-          supabase.from('cierres_dinero').select('efectivo, datafono, nequi').in('evento_id', relatedIds.length > 0 ? relatedIds : [openEvents[0].id]),
-          supabase.from('inventario_items').select('producto_id, cantidad, tipo').in('evento_id', relatedIds.length > 0 ? relatedIds : [openEvents[0].id]),
-        ]);
-
-        const prodMap = new Map((productos || []).map(p => [p.id, p]));
-
-        const totalEfectivo = (dineros?.data || []).reduce((a, b) => a + Number(b.efectivo || 0), 0);
-        const totalDatafono = (dineros?.data || []).reduce((a, b) => a + Number(b.datafono || 0), 0);
-        const totalNequi    = (dineros?.data || []).reduce((a, b) => a + Number(b.nequi    || 0), 0);
-        const totalGastos   = (gastos?.data || []).reduce((a, b) => a + Number(b.monto || 0), 0);
-
-        liveContext = `
---- CONTEXTO EN VIVO DEL EVENTO ACTUAL ("${baseName}") ---
+      liveContext = `
+--- CONTEXTO EN VIVO DEL EVENTO ("${baseName}") ---
 Eventos/Barras activas: ${openEvents.map(e => e.nombre).join(', ')}
-Total Productos en Catálogo: ${productos?.length || 0}
-Recaudación en Caja:
+Catálogo: ${productos?.length || 0} productos
+Recaudación:
 - Efectivo: $${totalEfectivo.toLocaleString('es-CO')}
 - Datáfono: $${totalDatafono.toLocaleString('es-CO')}
-- Nequi / QR: $${totalNequi.toLocaleString('es-CO')}
-- Gastos registrados: $${totalGastos.toLocaleString('es-CO')}
-- Recaudado Neto (Efectivo + Datáfono + Nequi - Gastos): $${(totalEfectivo + totalDatafono + totalNequi - totalGastos).toLocaleString('es-CO')}
-
-Resumen de operaciones registradas:
-- Recargas registradas: ${recargas?.data?.length || 0}
-- Cortesías registradas: ${cortesias?.data?.length || 0}
-- Pérdidas/Bajas registradas: ${perdidas?.data?.length || 0}
----------------------------------------------------------
-`;
-      }
-    } catch (e) {
-      console.warn('Could not fetch live context for AI prompt:', e);
+- Nequi/QR: $${totalNequi.toLocaleString('es-CO')}
+- Gastos: $${totalGastos.toLocaleString('es-CO')}
+- Neto: $${(totalEfectivo + totalDatafono + totalNequi - totalGastos).toLocaleString('es-CO')}
+Operaciones: ${recargas?.data?.length || 0} recargas, ${cortesias?.data?.length || 0} cortesías, ${perdidas?.data?.length || 0} bajas
+---`;
     }
+  } catch (e) {
+    console.warn('No se pudo obtener contexto en vivo:', e);
+  }
 
-    const systemMessage = {
-      role: 'system',
-      content: `Eres "BarraPro IA", el asistente inteligente experto en gestión de bodega, inventario, ventas y cuadre de caja para eventos y discotecas.
-Tu objetivo es ayudar a los administradores a entender sus cifras, auditar pérdidas, generar recomendaciones de stock, hacer conciliaciones y responder cualquier duda de la operación.
-
-REGLAS DE RESPUESTA:
-1. Responde de forma clara, directa, profesional y amigable usando lenguaje colombiano moderado si aplica.
-2. Usa formato Markdown elegante (negritas, listas con viñetas, emojis relevantes).
-3. Si los datos actuales están en el contexto, úsalos para dar respuestas exactas y numéricas.
-4. Si la pregunta es sobre cómo usar el sistema, guíalos paso a paso.
-
+  const systemMessage = {
+    role: 'system',
+    content: `Eres "BarraPro IA", el asistente experto en bodega, inventario y caja para eventos y discotecas en Colombia.
+Responde de forma clara, amigable y concisa. Usa Markdown (negritas, listas, emojis). Usa los datos del contexto cuando estén disponibles.
 ${liveContext}`
-    };
+  };
 
-    const formattedMessages = [systemMessage, ...(messages || [])];
+  const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+  let OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
 
-    const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
-    let OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+  // Auto-detect model
+  try {
+    const tagsRes = await fetch(`${OLLAMA_URL}/api/tags`, { cache: 'no-store' });
+    if (tagsRes.ok) {
+      const tagsData = await tagsRes.json();
+      const available = (tagsData.models || []).map((m: any) => m.name);
+      if (available.length > 0 && !available.includes(OLLAMA_MODEL)) {
+        OLLAMA_MODEL = available[0];
+      }
+    }
+  } catch {}
 
-    // Auto-detect installed model if available
-    try {
-      const tagsRes = await fetch(`${OLLAMA_URL}/api/tags`, { cache: 'no-store' });
-      if (tagsRes.ok) {
-        const tagsData = await tagsRes.json();
-        const availableModels = (tagsData.models || []).map((m: any) => m.name);
-        if (availableModels.length > 0) {
-          if (process.env.OLLAMA_MODEL && availableModels.includes(process.env.OLLAMA_MODEL)) {
-            OLLAMA_MODEL = process.env.OLLAMA_MODEL;
-          } else {
-            OLLAMA_MODEL = availableModels[0]; // Auto-use installed model (e.g. qwen2.5:7b)
+  // Use streaming to handle slow models and avoid timeout
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: OLLAMA_MODEL,
+            messages: [systemMessage, ...(messages || [])],
+            stream: true,
+          }),
+        });
+
+        if (!ollamaRes.ok || !ollamaRes.body) {
+          const errText = await ollamaRes.text().catch(() => '');
+          const msg = `data: ${JSON.stringify({ error: `Ollama error ${ollamaRes.status}: ${errText}` })}\n\n`;
+          controller.enqueue(encoder.encode(msg));
+          controller.close();
+          return;
+        }
+
+        const reader = ollamaRes.body.getReader();
+        const dec = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = dec.decode(value, { stream: true });
+          const lines = chunk.split('\n').filter(Boolean);
+          for (const line of lines) {
+            try {
+              const json = JSON.parse(line);
+              const token = json?.message?.content || '';
+              if (token) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+              }
+              if (json.done) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+              }
+            } catch {}
           }
         }
+      } catch (err: any) {
+        const errMsg = `⚠️ No se pudo conectar con Ollama. Ejecuta: \`ollama run ${OLLAMA_MODEL}\`\n\nDetalle: ${err.message}`;
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`));
       }
-    } catch (e) {
-      console.warn('Could not auto-detect Ollama tags:', e);
+      controller.close();
     }
+  });
 
-    try {
-      const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: OLLAMA_MODEL,
-          messages: formattedMessages,
-          stream: false,
-        }),
-      });
-
-      if (!ollamaRes.ok) {
-        const errText = await ollamaRes.text();
-        throw new Error(`Ollama API error (${ollamaRes.status}): ${errText}`);
-      }
-
-      const data = await ollamaRes.json();
-      const aiReply = data?.message?.content || 'No se recibió respuesta de Ollama.';
-
-      return NextResponse.json({ reply: aiReply });
-    } catch (err: any) {
-      console.error('Error connecting to local Ollama server:', err.message || err);
-      return NextResponse.json({
-        reply: `⚠️ **No se pudo comunicar con Ollama en tu PC.**
-
-Verifica que el servicio esté activo ejecutando en tu terminal:
-\`ollama run ${OLLAMA_MODEL}\`
-
-*Detalle:* ${err.message || 'Error de conexión'}`
-      });
-    }
-  } catch (error: any) {
-    console.error('Error in AI Route:', error);
-    return NextResponse.json({
-      reply: `⚠️ Ocurrió un inconveniente al procesar la solicitud: ${error?.message || 'Error interno'}`
-    });
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }

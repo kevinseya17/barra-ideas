@@ -52,9 +52,18 @@ export function AIChatModal() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
+    const assistantId = (Date.now() + 1).toString();
     setMessages(prev => [...prev, userMsg]);
     if (!textToSend) setInput('');
     setLoading(true);
+
+    // Add a placeholder assistant message that we'll stream into
+    setMessages(prev => [...prev, {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }]);
 
     try {
       const history = [...messages, userMsg].map(m => ({
@@ -68,27 +77,43 @@ export function AIChatModal() {
         body: JSON.stringify({ messages: history })
       });
 
-      const data = await res.json();
-      const aiReply = data.reply || 'Ocurrió un error inesperado al procesar tu solicitud.';
+      if (!res.body) throw new Error('No response body');
 
-      const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: aiReply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let fullContent = '';
 
-      setMessages(prev => [...prev, assistantMsg]);
-    } catch (error) {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: '⚠️ No me pude conectar con el servidor de IA local. Verifica que Ollama esté ejecutándose.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = dec.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line.replace('data: ', ''));
+            if (json.token) {
+              fullContent += json.token;
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: fullContent } : m
+              ));
+            }
+            if (json.error) {
+              fullContent = json.error;
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: json.error } : m
+              ));
+            }
+          } catch {}
         }
-      ]);
+      }
+    } catch (error) {
+      setMessages(prev => prev.map(m =>
+        m.id === assistantId
+          ? { ...m, content: '⚠️ No me pude conectar con Ollama. Verifica que el servicio esté activo.' }
+          : m
+      ));
     } finally {
       setLoading(false);
     }
@@ -227,7 +252,7 @@ export function AIChatModal() {
                 </div>
               ))}
 
-              {loading && (
+              {loading && messages[messages.length - 1]?.content === '' && (
                 <div className="flex gap-3 justify-start">
                   <div className="w-8 h-8 rounded-xl bg-emerald-950 border border-emerald-700/60 flex items-center justify-center shrink-0 animate-bounce">
                     <Sparkles className="w-4 h-4 text-emerald-400" />
