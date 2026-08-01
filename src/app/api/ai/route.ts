@@ -77,7 +77,25 @@ ${liveContext}`
     const formattedMessages = [systemMessage, ...(messages || [])];
 
     const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
-    const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+    let OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
+
+    // Auto-detect installed model if available
+    try {
+      const tagsRes = await fetch(`${OLLAMA_URL}/api/tags`, { cache: 'no-store' });
+      if (tagsRes.ok) {
+        const tagsData = await tagsRes.json();
+        const availableModels = (tagsData.models || []).map((m: any) => m.name);
+        if (availableModels.length > 0) {
+          if (process.env.OLLAMA_MODEL && availableModels.includes(process.env.OLLAMA_MODEL)) {
+            OLLAMA_MODEL = process.env.OLLAMA_MODEL;
+          } else {
+            OLLAMA_MODEL = availableModels[0]; // Auto-use installed model (e.g. qwen2.5:7b)
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not auto-detect Ollama tags:', e);
+    }
 
     try {
       const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -91,7 +109,8 @@ ${liveContext}`
       });
 
       if (!ollamaRes.ok) {
-        throw new Error(`Ollama returned status ${ollamaRes.status}`);
+        const errText = await ollamaRes.text();
+        throw new Error(`Ollama API error (${ollamaRes.status}): ${errText}`);
       }
 
       const data = await ollamaRes.json();
@@ -101,18 +120,18 @@ ${liveContext}`
     } catch (err: any) {
       console.error('Error connecting to local Ollama server:', err.message || err);
       return NextResponse.json({
-        reply: `⚠️ **Ollama no está disponible actualmente.**
+        reply: `⚠️ **No se pudo comunicar con Ollama en tu PC.**
 
-Para activar tu IA local en este computador:
-1. Abre tu terminal (PowerShell o CMD).
-2. Ejecuta el comando: \`ollama run llama3\` (o el modelo que tengas instalado, ej: \`ollama run mistral\`).
-3. Vuelve a hacer tu pregunta en este chat.
+Verifica que el servicio esté activo ejecutando en tu terminal:
+\`ollama run ${OLLAMA_MODEL}\`
 
-*Detalle del error:* No se pudo conectar a \`${process.env.OLLAMA_URL || 'http://127.0.0.1:11434'}\`.`
+*Detalle:* ${err.message || 'Error de conexión'}`
       });
     }
   } catch (error: any) {
     console.error('Error in AI Route:', error);
-    return NextResponse.json({ error: 'Error procesando la consulta' }, { status: 500 });
+    return NextResponse.json({
+      reply: `⚠️ Ocurrió un inconveniente al procesar la solicitud: ${error?.message || 'Error interno'}`
+    });
   }
 }
