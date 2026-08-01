@@ -14,6 +14,7 @@ import Historial from '@/components/Historial';
 import MonitorBarras from '@/components/MonitorBarras';
 import { Card } from '@/components/UI';
 import { ChevronRight, Plus, Pencil } from 'lucide-react';
+import { AIChatModal } from '@/components/AIChatModal';
 
 type Step = 'apertura' | 'operacion' | 'cierre' | 'reporte' | 'admin' | 'historial';
 const STEPS: Step[] = ['apertura', 'operacion', 'cierre', 'reporte'];
@@ -1697,6 +1698,9 @@ export default function BarraProApp() {
           </div>
         </div>
       )}
+
+      {/* Asistente IA Flotante */}
+      <AIChatModal />
 
       </div>
     </div>
